@@ -21,7 +21,7 @@ The Operator Identity is used to identify the Operator. The Operator can send Co
 ```c++
 #define OPERATOR "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
 ```
-3. Add 3-4 Know public Peers (can be optained from https://app.qubic.li/network/live)
+3. Add 3-4 Known Public Peers (can be obtained from https://app.qubic.li/network/live)
 ```c++
 static const unsigned char knownPublicPeers[][4] = {
   {12,13,14,12}
