@@ -25,6 +25,7 @@ static unsigned char getYear();
 #include "qubics/Qx.h"
 static CONTRACT_STATE_TYPE* _QX;
 
+#define MAX_CONTRACT_ITERATION_DURATION 1000 // In milliseconds, must be above 0
 #define MAX_NUMBER_OF_CONTRACTS 1024 // Must be 1024
 
 struct Contract0State
@@ -97,7 +98,7 @@ static const unsigned char knownPublicPeers[][4] = {
 
 #define VERSION_A 1
 #define VERSION_B 163
-#define VERSION_C 0
+#define VERSION_C 1
 
 #define EPOCH 69
 #define TICK 7600000
@@ -5460,10 +5461,13 @@ static unsigned long long* assetChangeFlags = NULL;
 static char CONTRACT_ASSET_UNIT_OF_MEASUREMENT[7] = { 0, 0, 0, 0, 0, 0, 0 };
 
 static volatile char computerLock = 0;
+static volatile char computationProcessorState = 0;
+static unsigned long long scBeginningTime;
+static volatile unsigned long long scLoopNumerator = 0, scLoopDenominator = 0;
+static EFI_EVENT computationProcessorEvent;
 static volatile char computationState = 0;
-static unsigned long long mainLoopNumerator = 0, mainLoopDenominator = 0, computation1000Delta;
+static unsigned long long mainLoopNumerator = 0, mainLoopDenominator = 0;
 static volatile unsigned int executedContractIndex;
-static EFI_EVENT computationEvent;
 static void (*__computation)(void*);
 static void (*computation)(void*, void*, void*);
 static unsigned char* contractStates[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])];
@@ -7290,7 +7294,6 @@ static void processTick(unsigned long long processorNumber)
         }
     }*/
 
-    const unsigned long long computationBeginningTick = __rdtsc();
     /*for (unsigned int counter = 0; counter < 1000; counter++)
     {
         for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
@@ -7315,7 +7318,6 @@ static void processTick(unsigned long long processorNumber)
             }
         }
     }*/
-    computation1000Delta = __rdtsc() - computationBeginningTick;
 
     ACQUIRE(tickDataLock);
     bs->CopyMem(&nextTickData, &tickData[system.tick - system.initialTick], sizeof(TickData));
@@ -8730,7 +8732,7 @@ static void computationProcessor(void*)
 
     if (computation == NULL)
     {
-        __computation(contractStates[executedContractIndex]);
+        //__computation(contractStates[executedContractIndex]);
     }
     else
     {
@@ -8747,6 +8749,18 @@ static void shutdownCallback(EFI_EVENT Event, void* Context)
 
 static void emptyCallback(EFI_EVENT Event, void* Context)
 {
+}
+
+static void computationProcessorShutdownCallback(EFI_EVENT Event, void* Context)
+{
+    bs->CloseEvent(Event);
+
+    // TODO
+    
+    scLoopNumerator += __rdtsc() - scBeginningTime;
+    scLoopDenominator++;
+
+    computationProcessorState = 0;
 }
 
 static void saveSpectrum()
@@ -10241,7 +10255,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                 if (numberOfProcessors == 2)
                 {
                     computingProcessorNumber = i;
-                    bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, shutdownCallback, NULL, &computationEvent);
                 }
                 else
                 {
@@ -10297,9 +10310,22 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             }
                         }
 
+                        if (!computationProcessorState)
+                        {
+                            scBeginningTime = __rdtsc();
+                            computationProcessorState = 1;
+                            bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, computationProcessorShutdownCallback, NULL, &computationProcessorEvent);
+                            if (status = mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * 3 * 1000, NULL, NULL))
+                            {
+                                bs->CloseEvent(computationProcessorEvent);
+                                computationProcessorState = 0;
+                            }
+                        }
+
                         /*if (computationState == 1)
                         {
                             computationState = 2;
+                            bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, shutdownCallback, NULL, &computationEvent);
                             if (mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationEvent, 1000000, NULL, NULL))
                             {
                                 computationState = 1;
@@ -10800,13 +10826,21 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             {
                                 setText(message, L"Main loop duration = ");
                                 appendNumber(message, (mainLoopNumerator / mainLoopDenominator) * 1000000 / frequency, TRUE);
-                                appendText(message, L" mcs. Execution of 1000 contracts = ");
-                                appendNumber(message, computation1000Delta * 1000000 / frequency, TRUE);
                                 appendText(message, L" mcs.");
                                 log(message);
                             }
                             mainLoopNumerator = 0;
                             mainLoopDenominator = 0;
+
+                            if (scLoopDenominator)
+                            {
+                                setText(message, L"SC kick-start duration = ");
+                                appendNumber(message, (scLoopNumerator / scLoopDenominator) * 1000000 / frequency, TRUE);
+                                appendText(message, L" mcs.");
+                                log(message);
+                            }
+                            scLoopNumerator = 0;
+                            scLoopDenominator = 0;
 
                             if (tickerLoopDenominator)
                             {
