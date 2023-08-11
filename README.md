@@ -52,7 +52,8 @@ Qubic.efi
 - `Qubic.efi` starts qubic
 
 > if you have multiple hard drives, the `fs0:` must changed to meet your environment.
-> to make it easier, you can copy & past our prepared initial disk from https://github.com/qubic-li/qubic/blob/main/qubic-initial-disk.zip
+
+> to make it easier, you can copy & paste our prepared initial disk from https://github.com/qubic-li/qubic/blob/main/qubic-initial-disk.zip
 
 
 ## General Process of deploying a node
