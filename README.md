@@ -25,7 +25,7 @@ mkfs.fat -F 32 -n QUBIC /dev/sda
 /universe.XXX
 /efi/boot
 /efi/boot/Bootx64.efi
-/efi/boot/statrup.nsh
+/efi/boot/startup.nsh
 /efi/boot/Qubic.efi
 ```
 - computer.XXX => must be the current computer file. XXX must be replaced with current epoch. (e.g `computer.068`)
