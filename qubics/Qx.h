@@ -20,31 +20,44 @@ public:
 	uint32 _tradeFee; // Number of billionths
 
 	PUBLIC(Transfer)
-		_
+	_
 
-		REGISTER_FUNCTIONS_FOR_USERS
-		_
+	REGISTER_FUNCTIONS_FOR_USERS
+	_
 
-		INITIALIZE
+	INITIALIZE
 
 		// No need to initialize _earnedAmount and other variables with 0, whole contract state is zeroed before initialization is invoked
 
 		s->_assetIssuanceFee = 1000000000;
-	s->_transferFee = 1000000;
-	s->_tradeFee = 5000000; // 0.5%
-	_
-
-		BEGIN_EPOCH
+		s->_transferFee = 1000000;
+		s->_tradeFee = 5000000; // 0.5%
 		_
 
-		END_EPOCH
-		_
-
-		BEGIN_TICK
-		s->_assetIssuanceFee += s->_transferFee * 13 + 1;
+	BEGIN_EPOCH
 	_
 
-		END_TICK
-		s->_transferFee++;
+	END_EPOCH
+	_
+
+	BEGIN_TICK
+		
+		id curId = NULL_ID;
+		while (true)
+		{
+			curId = nextId(curId);
+			if (EQUAL(curId, NULL_ID))
+			{
+				break;
+			}
+			if (transfer(curId, 1) < 0)
+			{
+				break;
+			}
+		}
+
+	_
+
+	END_TICK
 	_
 };

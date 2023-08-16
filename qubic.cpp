@@ -2,20 +2,22 @@
 
 ////////// Smart contracts \\\\\\\\\\
 
-static void beginFunction(const unsigned int);
-static void endFunction(const unsigned int);
-static __m256i getArbitrator();
-static __m256i getComputor(unsigned short);
-static unsigned char getDay();
-static unsigned char getDayOfWeek(unsigned char, unsigned char, unsigned char);
-static unsigned short getEpoch();
-static unsigned char getHour();
-static unsigned short getMillisecond();
-static unsigned char getMinute();
-static unsigned char getMonth();
-static unsigned char getSecond();
-static unsigned int getTick();
-static unsigned char getYear();
+static void __beginFunction(const unsigned int);
+static void __endFunction(const unsigned int);
+static __m256i __arbitrator();
+static __m256i __computor(unsigned short);
+static unsigned char __day();
+static unsigned char __dayOfWeek(unsigned char, unsigned char, unsigned char);
+static unsigned short __epoch();
+static unsigned char __hour();
+static unsigned short __millisecond();
+static unsigned char __minute();
+static unsigned char __month();
+static __m256i __nextId(__m256i);
+static unsigned char __second();
+static unsigned int __tick();
+static long long __transfer(__m256i, long long);
+static unsigned char __year();
 
 #include "qpi.h"
 
@@ -25,7 +27,8 @@ static unsigned char getYear();
 #include "qubics/Qx.h"
 static CONTRACT_STATE_TYPE* _QX;
 
-#define MAX_CONTRACT_ITERATION_DURATION 1000 // In milliseconds, must be above 0
+#define CONTRACT_ITERATION_BATCH_SIZE 100
+#define MAX_CONTRACT_ITERATION_DURATION 5000 // In milliseconds, must be above 0
 #define MAX_NUMBER_OF_CONTRACTS 1024 // Must be 1024
 
 struct Contract0State
@@ -40,7 +43,7 @@ constexpr struct ContractDescription
     unsigned long long stateSize;
 } contractDescriptions[] = {
     {"", 0, 0, sizeof(Contract0State)},
-    {"QX", 69, 10000, sizeof(QX)}
+    {"QX", 70, 10000, sizeof(QX)}
 };
 
 static void (*contractSystemFunctions[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])][5])(void*);
@@ -88,6 +91,7 @@ static unsigned char computorSeeds[][55 + 1] = {
 };
 
 static const unsigned char knownPublicPeers[][4] = {
+    {148,251,189,154}, {148,251,183,83}, {65,108,225,86}, {65,21,121,250}
 };
 
 
@@ -97,11 +101,11 @@ static const unsigned char knownPublicPeers[][4] = {
 #define AVX512 0
 
 #define VERSION_A 1
-#define VERSION_B 163
-#define VERSION_C 1
+#define VERSION_B 164
+#define VERSION_C 0
 
-#define EPOCH 69
-#define TICK 7600000
+#define EPOCH 70
+#define TICK 7900000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
@@ -109,6 +113,14 @@ static unsigned short SYSTEM_FILE_NAME[] = L"system";
 static unsigned short SPECTRUM_FILE_NAME[] = L"spectrum.???";
 static unsigned short UNIVERSE_FILE_NAME[] = L"universe.???";
 static unsigned short COMPUTER_FILE_NAME[] = L"computer.???";
+
+#define DATA_LENGTH 1024
+#define INFO_LENGTH 512
+#define NUMBER_OF_INPUT_NEURONS 640
+#define NUMBER_OF_OUTPUT_NEURONS 640
+#define MAX_INPUT_DURATION 10
+#define MAX_OUTPUT_DURATION 10
+#define SOLUTION_THRESHOLD 575
 
 
 
@@ -4880,7 +4892,7 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define MAX_INPUT_SIZE (MAX_TRANSACTION_SIZE - (sizeof(Transaction) + SIGNATURE_SIZE))
 #define MAX_NUMBER_OF_MINERS 8192
 #define NUMBER_OF_MINER_SOLUTION_FLAGS 0x100000000
-#define MAX_NUMBER_OF_PROCESSORS 28
+#define MAX_NUMBER_OF_PROCESSORS 128
 #define MAX_NUMBER_OF_PUBLIC_PEERS 1024
 #define MAX_NUMBER_OF_SOLUTIONS 65536 // Must be 2^N
 #define MAX_TRANSACTION_SIZE 1024ULL
@@ -4894,9 +4906,8 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define NUMBER_OF_EXCHANGED_PEERS 4
 #define NUMBER_OF_OUTGOING_CONNECTIONS 4
 #define NUMBER_OF_INCOMING_CONNECTIONS 60
-#define NUMBER_OF_NEURONS 4194304
 #define NUMBER_OF_TRANSACTIONS_PER_TICK 128 // Must be 2^N
-#define PEER_REFRESHING_PERIOD 10000
+#define PEER_REFRESHING_PERIOD 120000
 #define PORT 21841
 #define QUORUM (NUMBER_OF_COMPUTORS * 2 / 3 + 1)
 #define REQUEST_QUEUE_BUFFER_SIZE 1073741824
@@ -4904,7 +4915,6 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define RESPONSE_QUEUE_BUFFER_SIZE 1073741824
 #define RESPONSE_QUEUE_LENGTH 65536 // Must be 65536
 #define SIGNATURE_SIZE 64
-#define SOLUTION_THRESHOLD 22
 #define SPECTRUM_CAPACITY 0x1000000ULL // Must be 2^N
 #define SPECTRUM_DEPTH 24 // Is derived from SPECTRUM_CAPACITY (=N)
 #define READING_CHUNK_SIZE 1048576
@@ -5462,14 +5472,13 @@ static char CONTRACT_ASSET_UNIT_OF_MEASUREMENT[7] = { 0, 0, 0, 0, 0, 0, 0 };
 
 static volatile char computerLock = 0;
 static volatile char computationProcessorState = 0;
-static unsigned long long scBeginningTime;
 static volatile unsigned long long scLoopNumerator = 0, scLoopDenominator = 0;
 static EFI_EVENT computationProcessorEvent;
-static volatile char computationState = 0;
 static unsigned long long mainLoopNumerator = 0, mainLoopDenominator = 0;
 static volatile unsigned int executedContractIndex;
-static void (*__computation)(void*);
-static void (*computation)(void*, void*, void*);
+static void (*__computation)(void*) = NULL;
+static void (*computation)(void*, void*, void*) = NULL;
+static __m256i currentContract;
 static unsigned char* contractStates[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])];
 static __m256i contractStateDigests[MAX_NUMBER_OF_CONTRACTS * 2 - 1];
 static unsigned long long* contractStateChangeFlags = NULL;
@@ -5532,9 +5541,17 @@ static volatile char publicPeersLock = 0;
 static unsigned int numberOfPublicPeers = 0;
 static PublicPeer publicPeers[MAX_NUMBER_OF_PUBLIC_PEERS];
 
-static unsigned long long miningData[65536];
-static unsigned int validationNeuronLinks[MAX_NUMBER_OF_PROCESSORS][NUMBER_OF_NEURONS][2];
-static unsigned char validationNeuronValues[MAX_NUMBER_OF_PROCESSORS][NUMBER_OF_NEURONS];
+static unsigned long long miningData[DATA_LENGTH / 64];
+static struct
+{
+    unsigned long long input[(DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) / 64];
+    unsigned long long output[(INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) / 64];
+} neurons[MAX_NUMBER_OF_PROCESSORS];
+static struct
+{
+    unsigned long long input[(NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) / (64 / 2)];
+    unsigned long long output[(NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) / (64 / 2)];
+} synapses[MAX_NUMBER_OF_PROCESSORS];
 
 static volatile char solutionsLock = 0;
 static unsigned long long* minerSolutionFlags = NULL;
@@ -6366,60 +6383,85 @@ static void broadcastMessage(unsigned long long processorNumber, Processor* proc
                                     }
                                     if (k == system.numberOfSolutions)
                                     {
-                                        random(request->destinationPublicKey, &((unsigned char*)request)[sizeof(Message)], (unsigned char*)validationNeuronLinks[processorNumber], sizeof(validationNeuronLinks[0]));
-                                        for (k = 0; k < NUMBER_OF_NEURONS; k++)
+                                        random(request->destinationPublicKey, &((unsigned char*)request)[sizeof(Message)], (unsigned char*)&synapses[processorNumber], sizeof(synapses[0]));
+                                        for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
                                         {
-                                            validationNeuronLinks[processorNumber][k][0] %= NUMBER_OF_NEURONS;
-                                            validationNeuronLinks[processorNumber][k][1] %= NUMBER_OF_NEURONS;
+                                            const unsigned int offset = inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + (DATA_LENGTH + inputNeuronIndex);
+                                            synapses[processorNumber].input[offset >> 5] &= ~(3ULL << (offset & 31));
+                                        }
+                                        for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
+                                        {
+                                            const unsigned int offset = outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + (INFO_LENGTH + outputNeuronIndex);
+                                            synapses[processorNumber].output[offset >> 5] &= ~(3ULL << (offset & 31));
                                         }
 
-                                        bs->SetMem(validationNeuronValues[processorNumber], sizeof(validationNeuronValues[0]), 0xFF);
+                                        bs->CopyMem(&neurons[processorNumber].input[0], &miningData, sizeof(miningData));
+                                        bs->SetMem(&neurons[processorNumber].input[sizeof(miningData) / 8], sizeof(neurons[0]) - sizeof(miningData), 0);
 
-                                        unsigned int limiter = sizeof(miningData) / sizeof(miningData[0]);
-                                        int outputLength = 0;
-                                        while (outputLength < (sizeof(miningData) << 3))
+                                        for (unsigned int tick = 0; tick < MAX_INPUT_DURATION; tick++)
                                         {
-                                            const unsigned int prevValue0 = validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 1];
-                                            const unsigned int prevValue1 = validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 2];
-
-                                            for (k = 0; k < NUMBER_OF_NEURONS; k++)
+                                            unsigned int offset = 0;
+                                            for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
                                             {
-                                                validationNeuronValues[processorNumber][k] = ~(validationNeuronValues[processorNumber][validationNeuronLinks[processorNumber][k][0]] & validationNeuronValues[processorNumber][validationNeuronLinks[processorNumber][k][1]]);
-                                            }
-
-                                            if (validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 1] != prevValue0
-                                                && validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 2] == prevValue1)
-                                            {
-                                                if (!((miningData[outputLength >> 6] >> (outputLength & 63)) & 1))
+                                                unsigned int counters[2];
+                                                *((long long*)counters) = 0;
+                                                for (unsigned int anotherInputNeuronIndex = 0; anotherInputNeuronIndex < DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; anotherInputNeuronIndex++)
                                                 {
-                                                    break;
-                                                }
-
-                                                outputLength++;
-                                            }
-                                            else
-                                            {
-                                                if (validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 2] != prevValue1
-                                                    && validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 1] == prevValue0)
-                                                {
-                                                    if ((miningData[outputLength >> 6] >> (outputLength & 63)) & 1)
+                                                    const unsigned long long synapse = synapses[processorNumber].input[offset >> 5] >> ((offset & 31) << 1);
+                                                    offset++;
+                                                    if (synapse & 1)
                                                     {
-                                                        break;
+                                                        counters[((neurons[processorNumber].input[anotherInputNeuronIndex >> 6] >> (anotherInputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
                                                     }
-
-                                                    outputLength++;
+                                                }
+                                                if (counters[0] > counters[1])
+                                                {
+                                                    neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] &= ~(1ULL << (inputNeuronIndex & 63));
                                                 }
                                                 else
                                                 {
-                                                    if (!(--limiter))
-                                                    {
-                                                        break;
-                                                    }
+                                                    neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] |= (1ULL << (inputNeuronIndex & 63));
                                                 }
                                             }
                                         }
 
-                                        if (outputLength >= SOLUTION_THRESHOLD
+                                        bs->CopyMem(&neurons[processorNumber].output[0], &neurons[processorNumber].input[(DATA_LENGTH + NUMBER_OF_INPUT_NEURONS) / 64], INFO_LENGTH / 8);
+
+                                        for (unsigned int tick = 0; tick < MAX_OUTPUT_DURATION; tick++)
+                                        {
+                                            unsigned int offset = 0;
+                                            for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
+                                            {
+                                                unsigned int counters[2];
+                                                *((long long*)counters) = 0;
+                                                for (unsigned int anotherOutputNeuronIndex = 0; anotherOutputNeuronIndex < INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; anotherOutputNeuronIndex++)
+                                                {
+                                                    const unsigned long long synapse = synapses[processorNumber].output[offset >> 5] >> ((offset & 31) << 1);
+                                                    offset++;
+                                                    if (synapse & 1)
+                                                    {
+                                                        counters[((neurons[processorNumber].output[anotherOutputNeuronIndex >> 6] >> (anotherOutputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
+                                                    }
+                                                }
+                                                if (counters[0] > counters[1])
+                                                {
+                                                    neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] &= ~(1ULL << (outputNeuronIndex & 63));
+                                                }
+                                                else
+                                                {
+                                                    neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] |= (1ULL << (outputNeuronIndex & 63));
+                                                }
+                                            }
+                                        }
+
+                                        unsigned int score = 0;
+
+                                        for (unsigned int i = 0; i < DATA_LENGTH / 64; i++)
+                                        {
+                                            score += (64 - __popcnt64(miningData[i] ^ neurons[processorNumber].output[(INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS) / 64 + i]));
+                                        }
+
+                                        if (score >= SOLUTION_THRESHOLD
                                             && system.numberOfSolutions < MAX_NUMBER_OF_SOLUTIONS)
                                         {
                                             ACQUIRE(solutionsLock);
@@ -7178,7 +7220,7 @@ static EFI_HANDLE getTcp4Protocol(const unsigned char* remoteAddress, const unsi
     }
 }
 
-static void beginFunction(const unsigned int functionId)
+static void __beginFunction(const unsigned int functionId)
 {
     if (functionFlags[functionId >> 6] & (1ULL << (functionId & 63)))
     {
@@ -7190,69 +7232,113 @@ static void beginFunction(const unsigned int functionId)
     }
 }
 
-static void endFunction(const unsigned int functionId)
+static void __endFunction(const unsigned int functionId)
 {
     functionFlags[functionId >> 6] &= ~(1ULL << (functionId & 63));
 
     contractStateChangeFlags[functionId >> (22 + 6)] |= (1ULL << ((functionId >> 22) & 63));
 }
 
-static __m256i getArbitrator()
+static __m256i __arbitrator()
 {
     return arbitratorPublicKey;
 }
 
-static __m256i getComputor(unsigned short computorIndex)
+static __m256i __computor(unsigned short computorIndex)
 {
     return *((__m256i*)broadcastedComputors.broadcastComputors.computors.publicKeys[computorIndex % NUMBER_OF_COMPUTORS]);
 }
 
-static unsigned char getDay()
+static unsigned char __day()
 {
     return etalonTick.day;
 }
 
-static unsigned char getDayOfWeek(unsigned char year, unsigned char month, unsigned char day)
+static unsigned char __dayOfWeek(unsigned char year, unsigned char month, unsigned char day)
 {
     return dayIndex(year, month, day) % 7;
 }
 
-static unsigned short getEpoch()
+static unsigned short __epoch()
 {
     return system.epoch;
 }
 
-static unsigned char getHour()
+static unsigned char __hour()
 {
     return etalonTick.hour;
 }
 
-static unsigned short getMillisecond()
+static unsigned short __millisecond()
 {
     return etalonTick.millisecond;
 }
 
-static unsigned char getMinute()
+static unsigned char __minute()
 {
     return etalonTick.minute;
 }
 
-static unsigned char getMonth()
+static unsigned char __month()
 {
     return etalonTick.month;
 }
 
-static unsigned char getSecond()
+static __m256i __nextId(__m256i currentId)
+{
+    int index = spectrumIndex((unsigned char*)&currentId);
+    while (++index < SPECTRUM_CAPACITY)
+    {
+        const __m256i nextId = *((__m256i*)spectrum[index].publicKey);
+        if (!EQUAL(nextId, ZERO))
+        {
+            return nextId;
+        }
+    }
+
+    return ZERO;
+}
+
+static unsigned char __second()
 {
     return etalonTick.second;
 }
 
-static unsigned int getTick()
+static unsigned int __tick()
 {
     return system.tick;
 }
 
-static unsigned char getYear()
+static long long __transfer(__m256i destination, long long amount)
+{
+    if (((unsigned long long)amount) > MAX_AMOUNT)
+    {
+        return -(MAX_AMOUNT + 1);
+    }
+
+    const int index = spectrumIndex((unsigned char*)&currentContract);
+
+    if (index < 0)
+    {
+        return -amount;
+    }
+
+    const long long remainingAmount = energy(index) - amount;
+
+    if (remainingAmount < 0)
+    {
+        return remainingAmount;
+    }
+
+    if (decreaseEnergy(index, amount))
+    {
+        increaseEnergy((unsigned char*)&destination, amount);
+    }
+
+    return remainingAmount;
+}
+
+static unsigned char __year()
 {
     return etalonTick.year;
 }
@@ -7268,56 +7354,36 @@ static void processTick(unsigned long long processorNumber)
     getUniverseDigest((__m256i*)etalonTick.prevUniverseDigest);
     getComputerDigest((__m256i*)etalonTick.prevComputerDigest);
 
-    /*if (system.tick == system.initialTick)
+    if (system.tick == system.initialTick)
     {
         for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
         {
-            if (system.epoch == contractDescriptions[executedContractIndex].constructionEpoch)
-            {
-                __computation = contractSystemFunctions[executedContractIndex][INITIALIZE];
-
-                computationState = 1;
-                const unsigned long long computationBeginningTick = __rdtsc();
-                unsigned long long delta;
-                while (_InterlockedCompareExchange8(&computationState, 0, 3) != 3
-                    && (delta = __rdtsc() - computationBeginningTick) <= frequency)
-                {
-                    _mm_pause();
-                }
-                if (delta > frequency)
-                {
-                    computationState = 0;
-                }
-
-                computation1000Delta = delta;
-            }
-        }
-    }*/
-
-    /*for (unsigned int counter = 0; counter < 1000; counter++)
-    {
-        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
-        {
-            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+            if (system.epoch == contractDescriptions[executedContractIndex].constructionEpoch
                 && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
             {
-                __computation = contractSystemFunctions[executedContractIndex][BEGIN_TICK];
-
-                computationState = 1;
-                unsigned long long delta;
-                while (_InterlockedCompareExchange8(&computationState, 0, 3) != 3
-                     && (delta = __rdtsc() - computationBeginningTick) <= frequency)
+                __computation = contractSystemFunctions[executedContractIndex][INITIALIZE];
+                
+                while (__computation)
                 {
                     _mm_pause();
                 }
-                if (delta > frequency)
-                {
-                    computationState = 0;
-                }
-
             }
         }
-    }*/
+    }
+
+    for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+    {
+        if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+            && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+        {
+            __computation = contractSystemFunctions[executedContractIndex][BEGIN_TICK];
+
+            while (__computation)
+            {
+                _mm_pause();
+            }
+        }
+    }
 
     ACQUIRE(tickDataLock);
     bs->CopyMem(&nextTickData, &tickData[system.tick - system.initialTick], sizeof(TickData));
@@ -7463,63 +7529,88 @@ static void processTick(unsigned long long processorNumber)
                                         {
                                             minerSolutionFlags[flagIndex >> 6] |= (1ULL << (flagIndex & 63));
 
-                                            random(transaction->sourcePublicKey, ((unsigned char*)transaction) + sizeof(Transaction), (unsigned char*)validationNeuronLinks[processorNumber], sizeof(validationNeuronLinks[0]));
-                                            for (unsigned int k = 0; k < NUMBER_OF_NEURONS; k++)
+                                            random(transaction->sourcePublicKey, ((unsigned char*)transaction) + sizeof(Transaction), (unsigned char*)&synapses[processorNumber], sizeof(synapses[0]));
+                                            for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
                                             {
-                                                validationNeuronLinks[processorNumber][k][0] %= NUMBER_OF_NEURONS;
-                                                validationNeuronLinks[processorNumber][k][1] %= NUMBER_OF_NEURONS;
+                                                const unsigned int offset = inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + (DATA_LENGTH + inputNeuronIndex);
+                                                synapses[processorNumber].input[offset >> 5] &= ~(3ULL << (offset & 31));
+                                            }
+                                            for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
+                                            {
+                                                const unsigned int offset = outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + (INFO_LENGTH + outputNeuronIndex);
+                                                synapses[processorNumber].output[offset >> 5] &= ~(3ULL << (offset & 31));
                                             }
 
-                                            bs->SetMem(validationNeuronValues[processorNumber], sizeof(validationNeuronValues[0]), 0xFF);
+                                            bs->CopyMem(&neurons[processorNumber].input[0], &miningData, sizeof(miningData));
+                                            bs->SetMem(&neurons[processorNumber].input[sizeof(miningData) / 8], sizeof(neurons[0]) - sizeof(miningData), 0);
 
-                                            unsigned int limiter = sizeof(miningData) / sizeof(miningData[0]);
-                                            int outputLength = 0;
-                                            while (outputLength < (sizeof(miningData) << 3))
+                                            for (unsigned int tick = 0; tick < MAX_INPUT_DURATION; tick++)
                                             {
-                                                const unsigned int prevValue0 = validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 1];
-                                                const unsigned int prevValue1 = validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 2];
-
-                                                for (unsigned int k = 0; k < NUMBER_OF_NEURONS; k++)
+                                                unsigned int offset = 0;
+                                                for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
                                                 {
-                                                    validationNeuronValues[processorNumber][k] = ~(validationNeuronValues[processorNumber][validationNeuronLinks[processorNumber][k][0]] & validationNeuronValues[processorNumber][validationNeuronLinks[processorNumber][k][1]]);
-                                                }
-
-                                                if (validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 1] != prevValue0
-                                                    && validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 2] == prevValue1)
-                                                {
-                                                    if (!((miningData[outputLength >> 6] >> (outputLength & 63)) & 1))
+                                                    unsigned int counters[2];
+                                                    *((long long*)counters) = 0;
+                                                    for (unsigned int anotherInputNeuronIndex = 0; anotherInputNeuronIndex < DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; anotherInputNeuronIndex++)
                                                     {
-                                                        break;
-                                                    }
-
-                                                    outputLength++;
-                                                }
-                                                else
-                                                {
-                                                    if (validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 2] != prevValue1
-                                                        && validationNeuronValues[processorNumber][NUMBER_OF_NEURONS - 1] == prevValue0)
-                                                    {
-                                                        if ((miningData[outputLength >> 6] >> (outputLength & 63)) & 1)
+                                                        const unsigned long long synapse = synapses[processorNumber].input[offset >> 5] >> ((offset & 31) << 1);
+                                                        offset++;
+                                                        if (synapse & 1)
                                                         {
-                                                            break;
+                                                            counters[((neurons[processorNumber].input[anotherInputNeuronIndex >> 6] >> (anotherInputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
                                                         }
-
-                                                        outputLength++;
+                                                    }
+                                                    if (counters[0] > counters[1])
+                                                    {
+                                                        neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] &= ~(1ULL << (inputNeuronIndex & 63));
                                                     }
                                                     else
                                                     {
-                                                        if (!(--limiter))
-                                                        {
-                                                            break;
-                                                        }
+                                                        neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] |= (1ULL << (inputNeuronIndex & 63));
                                                     }
                                                 }
                                             }
 
-                                            if (outputLength >= SOLUTION_THRESHOLD)
+                                            bs->CopyMem(&neurons[processorNumber].output[0], &neurons[processorNumber].input[(DATA_LENGTH + NUMBER_OF_INPUT_NEURONS) / 64], INFO_LENGTH / 8);
+
+                                            for (unsigned int tick = 0; tick < MAX_OUTPUT_DURATION; tick++)
+                                            {
+                                                unsigned int offset = 0;
+                                                for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
+                                                {
+                                                    unsigned int counters[2];
+                                                    *((long long*)counters) = 0;
+                                                    for (unsigned int anotherOutputNeuronIndex = 0; anotherOutputNeuronIndex < INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; anotherOutputNeuronIndex++)
+                                                    {
+                                                        const unsigned long long synapse = synapses[processorNumber].output[offset >> 5] >> ((offset & 31) << 1);
+                                                        offset++;
+                                                        if (synapse & 1)
+                                                        {
+                                                            counters[((neurons[processorNumber].output[anotherOutputNeuronIndex >> 6] >> (anotherOutputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
+                                                        }
+                                                    }
+                                                    if (counters[0] > counters[1])
+                                                    {
+                                                        neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] &= ~(1ULL << (outputNeuronIndex & 63));
+                                                    }
+                                                    else
+                                                    {
+                                                        neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] |= (1ULL << (outputNeuronIndex & 63));
+                                                    }
+                                                }
+                                            }
+
+                                            unsigned int score = 0;
+
+                                            for (unsigned int i = 0; i < DATA_LENGTH / 64; i++)
+                                            {
+                                                score += (64 - __popcnt64(miningData[i] ^ neurons[processorNumber].output[(INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS) / 64 + i]));
+                                            }
+
+                                            if (score >= SOLUTION_THRESHOLD)
                                             {
                                                 __m256i minerSolutionDigest;
-                                                KangarooTwelve((unsigned char*)&outputLength, sizeof(outputLength), (unsigned char*)&minerSolutionDigest, sizeof(minerSolutionDigest));
+                                                KangarooTwelve((unsigned char*)&score, sizeof(score), (unsigned char*)&minerSolutionDigest, sizeof(minerSolutionDigest));
                                                 minerSolutionsDigest = _mm256_xor_si256(minerSolutionsDigest, minerSolutionDigest);
 
                                                 for (unsigned int i = 0; i < sizeof(computorSeeds) / sizeof(computorSeeds[0]); i++)
@@ -7599,29 +7690,19 @@ static void processTick(unsigned long long processorNumber)
         }
     }
 
-    /*for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
+    for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
     {
         if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
             && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
         {
             __computation = contractSystemFunctions[executedContractIndex][END_TICK];
 
-            computationState = 1;
-            const unsigned long long computationBeginningTick = __rdtsc();
-            unsigned long long delta;
-            while (_InterlockedCompareExchange8(&computationState, 0, 3) != 3
-                && (delta = __rdtsc() - computationBeginningTick) <= frequency)
+            while (__computation)
             {
                 _mm_pause();
             }
-            if (delta > frequency)
-            {
-                computationState = 0;
-            }
-
-            //computation1000Delta = delta;
         }
-    }*/
+    }
 
     unsigned int digestIndex;
     for (digestIndex = 0; digestIndex < SPECTRUM_CAPACITY; digestIndex++)
@@ -8730,16 +8811,36 @@ static void computationProcessor(void*)
 {
     enableAVX();
 
-    if (computation == NULL)
+    const unsigned long long deadline = __rdtsc() + MAX_CONTRACT_ITERATION_DURATION * CONTRACT_ITERATION_BATCH_SIZE * frequency / 1000;
+    while (__rdtsc() < deadline)
     {
-        //__computation(contractStates[executedContractIndex]);
-    }
-    else
-    {
-        // TODO
+        if (computation)
+        {
+            // TODO
+        }
+        else
+        {
+            if (__computation)
+            {
+                const unsigned long long scBeginningTime = __rdtsc();
+
+                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+                __computation(contractStates[executedContractIndex]);
+
+                scLoopNumerator += __rdtsc() - scBeginningTime;
+                scLoopDenominator++;
+
+                __computation = NULL;
+            }
+            else
+            {
+                _mm_pause();
+            }
+        }
     }
 
-    computationState = 3;
+    computationProcessorState = 2;
 }
 
 static void shutdownCallback(EFI_EVENT Event, void* Context)
@@ -8755,11 +8856,11 @@ static void computationProcessorShutdownCallback(EFI_EVENT Event, void* Context)
 {
     bs->CloseEvent(Event);
 
-    // TODO
+    if (computationProcessorState != 2)
+    {
+        // TODO
+    }
     
-    scLoopNumerator += __rdtsc() - scBeginningTime;
-    scLoopDenominator++;
-
     computationProcessorState = 0;
 }
 
@@ -9485,14 +9586,14 @@ static bool initialize()
 
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
-        randomSeed[0] = 1;
-        randomSeed[1] = 0;
-        randomSeed[2] = 233;
-        randomSeed[3] = 9;
-        randomSeed[4] = 136;
-        randomSeed[5] = 69;
-        randomSeed[6] = 43;
-        randomSeed[7] = 139;
+        randomSeed[0] = 155;
+        randomSeed[1] = 99;
+        randomSeed[2] = 37;
+        randomSeed[3] = 69;
+        randomSeed[4] = 255;
+        randomSeed[5] = 0;
+        randomSeed[6] = 73;
+        randomSeed[7] = 77;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
@@ -10312,25 +10413,14 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
 
                         if (!computationProcessorState)
                         {
-                            scBeginningTime = __rdtsc();
                             computationProcessorState = 1;
                             bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, computationProcessorShutdownCallback, NULL, &computationProcessorEvent);
-                            if (status = mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * 3 * 1000, NULL, NULL))
+                            if (status = mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * CONTRACT_ITERATION_BATCH_SIZE * 2 * 1000, NULL, NULL))
                             {
                                 bs->CloseEvent(computationProcessorEvent);
                                 computationProcessorState = 0;
                             }
                         }
-
-                        /*if (computationState == 1)
-                        {
-                            computationState = 2;
-                            bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, shutdownCallback, NULL, &computationEvent);
-                            if (mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationEvent, 1000000, NULL, NULL))
-                            {
-                                computationState = 1;
-                            }
-                        }*/
 
                         peerTcp4Protocol->Poll(peerTcp4Protocol);
 
@@ -10834,7 +10924,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
 
                             if (scLoopDenominator)
                             {
-                                setText(message, L"SC kick-start duration = ");
+                                setText(message, L"SC execution duration = ");
                                 appendNumber(message, (scLoopNumerator / scLoopDenominator) * 1000000 / frequency, TRUE);
                                 appendText(message, L" mcs.");
                                 log(message);
