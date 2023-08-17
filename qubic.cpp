@@ -105,7 +105,7 @@ static const unsigned char knownPublicPeers[][4] = {
 #define VERSION_C 0
 
 #define EPOCH 70
-#define TICK 7900000
+#define TICK 7920000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
@@ -120,7 +120,7 @@ static unsigned short COMPUTER_FILE_NAME[] = L"computer.???";
 #define NUMBER_OF_OUTPUT_NEURONS 640
 #define MAX_INPUT_DURATION 10
 #define MAX_OUTPUT_DURATION 10
-#define SOLUTION_THRESHOLD 575
+#define SOLUTION_THRESHOLD 600
 
 
 
@@ -9586,14 +9586,14 @@ static bool initialize()
 
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
-        randomSeed[0] = 155;
-        randomSeed[1] = 99;
-        randomSeed[2] = 37;
-        randomSeed[3] = 69;
-        randomSeed[4] = 255;
-        randomSeed[5] = 0;
-        randomSeed[6] = 73;
-        randomSeed[7] = 77;
+         randomSeed[0] = 28;
+		 randomSeed[1] = 0;
+		 randomSeed[2] = 7;
+		 randomSeed[3] = 69;
+		 randomSeed[4] = 255;
+		 randomSeed[5] = 0;
+		 randomSeed[6] = 73;
+		 randomSeed[7] = 77;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
