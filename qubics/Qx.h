@@ -41,21 +41,6 @@ public:
 	_
 
 	BEGIN_TICK
-		
-		id curId = NULL_ID;
-		while (true)
-		{
-			curId = nextId(curId);
-			if (EQUAL(curId, NULL_ID))
-			{
-				break;
-			}
-			if (transfer(curId, 1) < 0)
-			{
-				break;
-			}
-		}
-
 	_
 
 	END_TICK

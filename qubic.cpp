@@ -27,6 +27,8 @@ static unsigned char __year();
 #include "qubics/Qx.h"
 static CONTRACT_STATE_TYPE* _QX;
 
+#define QUOTTERY_CONTRACT_INDEX 2
+
 #define CONTRACT_ITERATION_BATCH_SIZE 100
 #define MAX_CONTRACT_ITERATION_DURATION 5000 // In milliseconds, must be above 0
 #define MAX_NUMBER_OF_CONTRACTS 1024 // Must be 1024
@@ -36,6 +38,12 @@ struct Contract0State
     long long contractFeeReserves[MAX_NUMBER_OF_CONTRACTS];
 };
 
+struct IPO
+{
+    unsigned char publicKeys[NUMBER_OF_COMPUTORS][32];
+    long long prices[NUMBER_OF_COMPUTORS];
+};
+
 constexpr struct ContractDescription
 {
     char assetName[8];
@@ -43,7 +51,8 @@ constexpr struct ContractDescription
     unsigned long long stateSize;
 } contractDescriptions[] = {
     {"", 0, 0, sizeof(Contract0State)},
-    {"QX", 70, 10000, sizeof(QX)}
+    {"QX", 71, 10000, sizeof(QX)},
+    {"QTRY", 72, 10000, sizeof(IPO)}
 };
 
 static void (*contractSystemFunctions[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])][5])(void*);
@@ -91,7 +100,6 @@ static unsigned char computorSeeds[][55 + 1] = {
 };
 
 static const unsigned char knownPublicPeers[][4] = {
-    {148,251,189,154}, {148,251,183,83}, {65,108,225,86}, {65,21,121,250}
 };
 
 
@@ -101,26 +109,26 @@ static const unsigned char knownPublicPeers[][4] = {
 #define AVX512 0
 
 #define VERSION_A 1
-#define VERSION_B 164
+#define VERSION_B 166
 #define VERSION_C 0
 
-#define EPOCH 70
-#define TICK 7920000
+#define EPOCH 71
+#define TICK 8100000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
 static unsigned short SYSTEM_FILE_NAME[] = L"system";
 static unsigned short SPECTRUM_FILE_NAME[] = L"spectrum.???";
 static unsigned short UNIVERSE_FILE_NAME[] = L"universe.???";
-static unsigned short COMPUTER_FILE_NAME[] = L"computer.???";
+static unsigned short CONTRACT_FILE_NAME[] = L"contract????.???";
 
-#define DATA_LENGTH 1024
-#define INFO_LENGTH 512
-#define NUMBER_OF_INPUT_NEURONS 640
-#define NUMBER_OF_OUTPUT_NEURONS 640
-#define MAX_INPUT_DURATION 10
-#define MAX_OUTPUT_DURATION 10
-#define SOLUTION_THRESHOLD 600
+#define DATA_LENGTH 2000
+#define INFO_LENGTH 1000
+#define NUMBER_OF_INPUT_NEURONS 1000
+#define NUMBER_OF_OUTPUT_NEURONS 1000
+#define MAX_INPUT_DURATION 20
+#define MAX_OUTPUT_DURATION 20
+#define SOLUTION_THRESHOLD 1100
 
 
 
@@ -4892,7 +4900,7 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define MAX_INPUT_SIZE (MAX_TRANSACTION_SIZE - (sizeof(Transaction) + SIGNATURE_SIZE))
 #define MAX_NUMBER_OF_MINERS 8192
 #define NUMBER_OF_MINER_SOLUTION_FLAGS 0x100000000
-#define MAX_NUMBER_OF_PROCESSORS 128
+#define MAX_NUMBER_OF_PROCESSORS 64
 #define MAX_NUMBER_OF_PUBLIC_PEERS 1024
 #define MAX_NUMBER_OF_SOLUTIONS 65536 // Must be 2^N
 #define MAX_TRANSACTION_SIZE 1024ULL
@@ -4910,6 +4918,8 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define PEER_REFRESHING_PERIOD 120000
 #define PORT 21841
 #define QUORUM (NUMBER_OF_COMPUTORS * 2 / 3 + 1)
+#define READING_CHUNK_SIZE 1048576
+#define WRITING_CHUNK_SIZE 1048576
 #define REQUEST_QUEUE_BUFFER_SIZE 1073741824
 #define REQUEST_QUEUE_LENGTH 65536 // Must be 65536
 #define RESPONSE_QUEUE_BUFFER_SIZE 1073741824
@@ -4917,12 +4927,6 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define SIGNATURE_SIZE 64
 #define SPECTRUM_CAPACITY 0x1000000ULL // Must be 2^N
 #define SPECTRUM_DEPTH 24 // Is derived from SPECTRUM_CAPACITY (=N)
-#define READING_CHUNK_SIZE 1048576
-#define SPECTRUM_READING_CHUNK_SIZE 1048576
-#define ASSETS_READING_CHUNK_SIZE 786432
-#define WRITING_CHUNK_SIZE 1048576
-#define SPECTRUM_WRITING_CHUNK_SIZE 1048576
-#define ASSETS_WRITING_CHUNK_SIZE 786432
 #define SYSTEM_DATA_SAVING_PERIOD 300000
 #define TICK_TRANSACTIONS_PUBLICATION_OFFSET 2 // Must be only 2
 #define MIN_MINING_SOLUTIONS_PUBLICATION_OFFSET 3 // Must be 3+
@@ -4986,12 +4990,6 @@ struct Asset
             long long numberOfUnits;
         } possession;
     } varStruct;
-};
-
-struct IPO
-{
-    unsigned char publicKeys[NUMBER_OF_COMPUTORS][32];
-    long long prices[NUMBER_OF_COMPUTORS];
 };
 
 typedef struct
@@ -5541,16 +5539,17 @@ static volatile char publicPeersLock = 0;
 static unsigned int numberOfPublicPeers = 0;
 static PublicPeer publicPeers[MAX_NUMBER_OF_PUBLIC_PEERS];
 
-static unsigned long long miningData[DATA_LENGTH / 64];
+static int miningData[DATA_LENGTH];
 static struct
 {
-    unsigned long long input[(DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) / 64];
-    unsigned long long output[(INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) / 64];
+    int input[DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH];
+    int output[INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH];
 } neurons[MAX_NUMBER_OF_PROCESSORS];
 static struct
 {
-    unsigned long long input[(NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) / (64 / 2)];
-    unsigned long long output[(NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) / (64 / 2)];
+    char input[(NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH)];
+    char output[(NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH)];
+    unsigned short lengths[MAX_INPUT_DURATION * (NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + MAX_OUTPUT_DURATION * (NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH)];
 } synapses[MAX_NUMBER_OF_PROCESSORS];
 
 static volatile char solutionsLock = 0;
@@ -6123,7 +6122,7 @@ static void getUniverseDigest(__m256i* digest)
 
 static void getComputerDigest(__m256i* digest)
 {
-    /*unsigned int digestIndex;
+    unsigned int digestIndex;
     for (digestIndex = 0; digestIndex < MAX_NUMBER_OF_CONTRACTS; digestIndex++)
     {
         if (contractStateChangeFlags[digestIndex >> 6] & (1ULL << (digestIndex & 63)))
@@ -6156,9 +6155,9 @@ static void getComputerDigest(__m256i* digest)
         previousLevelBeginning += numberOfLeafs;
         numberOfLeafs >>= 1;
     }
-    contractStateChangeFlags[0] = 0;*/
+    contractStateChangeFlags[0] = 0;
 
-    *digest = ZERO;// contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
+    *digest = contractStateDigests[(MAX_NUMBER_OF_CONTRACTS * 2 - 1) - 1];
 }
 
 static void closePeer(Peer* peer)
@@ -6302,7 +6301,99 @@ static void enqueueResponse(Peer* peer, const bool randomizeDejavu, const unsign
     RELEASE(responseQueueHeadLock);
 }
 
-static void broadcastMessage(unsigned long long processorNumber, Processor* processor, RequestResponseHeader* header)
+static unsigned int score(const unsigned long long processorNumber, unsigned char* publicKey, unsigned char* nonce)
+{
+    random(publicKey, nonce, (unsigned char*)&synapses[processorNumber], sizeof(synapses[0]));
+    for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
+    {
+        for (unsigned int anotherInputNeuronIndex = 0; anotherInputNeuronIndex < DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; anotherInputNeuronIndex++)
+        {
+            const unsigned int offset = inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + anotherInputNeuronIndex;
+            synapses[processorNumber].input[offset] = (((unsigned char)synapses[processorNumber].input[offset]) % 3) - 1;
+        }
+    }
+    for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
+    {
+        for (unsigned int anotherOutputNeuronIndex = 0; anotherOutputNeuronIndex < INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; anotherOutputNeuronIndex++)
+        {
+            const unsigned int offset = outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + anotherOutputNeuronIndex;
+            synapses[processorNumber].output[offset] = (((unsigned char)synapses[processorNumber].output[offset]) % 3) - 1;
+        }
+    }
+    for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
+    {
+        synapses[processorNumber].input[inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + (DATA_LENGTH + inputNeuronIndex)] = 0;
+    }
+    for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
+    {
+        synapses[processorNumber].output[outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + (INFO_LENGTH + outputNeuronIndex)] = 0;
+    }
+
+    unsigned int lengthIndex = 0;
+
+    bs->CopyMem(&neurons[processorNumber].input[0], &miningData, sizeof(miningData));
+    bs->SetMem(&neurons[processorNumber].input[sizeof(miningData) / sizeof(neurons[0].input[0])], sizeof(neurons[0]) - sizeof(miningData), 0);
+
+    for (unsigned int tick = 0; tick < MAX_INPUT_DURATION; tick++)
+    {
+        unsigned short neuronIndices[NUMBER_OF_INPUT_NEURONS + INFO_LENGTH];
+        unsigned short numberOfRemainingNeurons = 0;
+        for (numberOfRemainingNeurons = 0; numberOfRemainingNeurons < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; numberOfRemainingNeurons++)
+        {
+            neuronIndices[numberOfRemainingNeurons] = numberOfRemainingNeurons;
+        }
+        while (numberOfRemainingNeurons)
+        {
+            const unsigned short neuronIndexIndex = synapses[processorNumber].lengths[lengthIndex++] % numberOfRemainingNeurons;
+            const unsigned short inputNeuronIndex = neuronIndices[neuronIndexIndex];
+            neuronIndices[neuronIndexIndex] = neuronIndices[--numberOfRemainingNeurons];
+            for (unsigned short anotherInputNeuronIndex = 0; anotherInputNeuronIndex < DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; anotherInputNeuronIndex++)
+            {
+                int value = neurons[processorNumber].input[anotherInputNeuronIndex] >= 0 ? 1 : -1;
+                value *= synapses[processorNumber].input[inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + anotherInputNeuronIndex];
+                neurons[processorNumber].input[DATA_LENGTH + inputNeuronIndex] += value;
+            }
+        }
+    }
+
+    bs->CopyMem(&neurons[processorNumber].output[0], &neurons[processorNumber].input[DATA_LENGTH + NUMBER_OF_INPUT_NEURONS], INFO_LENGTH * sizeof(neurons[0].input[0]));
+
+    for (unsigned int tick = 0; tick < MAX_OUTPUT_DURATION; tick++)
+    {
+        unsigned short neuronIndices[NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH];
+        unsigned short numberOfRemainingNeurons = 0;
+        for (numberOfRemainingNeurons = 0; numberOfRemainingNeurons < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; numberOfRemainingNeurons++)
+        {
+            neuronIndices[numberOfRemainingNeurons] = numberOfRemainingNeurons;
+        }
+        while (numberOfRemainingNeurons)
+        {
+            const unsigned short neuronIndexIndex = synapses[processorNumber].lengths[lengthIndex++] % numberOfRemainingNeurons;
+            const unsigned short outputNeuronIndex = neuronIndices[neuronIndexIndex];
+            neuronIndices[neuronIndexIndex] = neuronIndices[--numberOfRemainingNeurons];
+            for (unsigned int anotherOutputNeuronIndex = 0; anotherOutputNeuronIndex < INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; anotherOutputNeuronIndex++)
+            {
+                int value = neurons[processorNumber].output[anotherOutputNeuronIndex] >= 0 ? 1 : -1;
+                value *= synapses[processorNumber].output[outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + anotherOutputNeuronIndex];
+                neurons[processorNumber].output[INFO_LENGTH + outputNeuronIndex] += value;
+            }
+        }
+    }
+
+    unsigned int score = 0;
+
+    for (unsigned int i = 0; i < DATA_LENGTH; i++)
+    {
+        if ((miningData[i] >= 0) == (neurons[processorNumber].output[INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + i] >= 0))
+        {
+            score++;
+        }
+    }
+
+    return score;
+}
+
+static void broadcastMessage(const unsigned long long processorNumber, Processor* processor, RequestResponseHeader* header)
 {
     Message* request = (Message*)((char*)processor->buffer + sizeof(RequestResponseHeader));
     if (header->size() <= sizeof(RequestResponseHeader) + sizeof(Message) + MAX_MESSAGE_PAYLOAD_SIZE + SIGNATURE_SIZE
@@ -6383,86 +6474,8 @@ static void broadcastMessage(unsigned long long processorNumber, Processor* proc
                                     }
                                     if (k == system.numberOfSolutions)
                                     {
-                                        random(request->destinationPublicKey, &((unsigned char*)request)[sizeof(Message)], (unsigned char*)&synapses[processorNumber], sizeof(synapses[0]));
-                                        for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
-                                        {
-                                            const unsigned int offset = inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + (DATA_LENGTH + inputNeuronIndex);
-                                            synapses[processorNumber].input[offset >> 5] &= ~(3ULL << (offset & 31));
-                                        }
-                                        for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
-                                        {
-                                            const unsigned int offset = outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + (INFO_LENGTH + outputNeuronIndex);
-                                            synapses[processorNumber].output[offset >> 5] &= ~(3ULL << (offset & 31));
-                                        }
-
-                                        bs->CopyMem(&neurons[processorNumber].input[0], &miningData, sizeof(miningData));
-                                        bs->SetMem(&neurons[processorNumber].input[sizeof(miningData) / 8], sizeof(neurons[0]) - sizeof(miningData), 0);
-
-                                        for (unsigned int tick = 0; tick < MAX_INPUT_DURATION; tick++)
-                                        {
-                                            unsigned int offset = 0;
-                                            for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
-                                            {
-                                                unsigned int counters[2];
-                                                *((long long*)counters) = 0;
-                                                for (unsigned int anotherInputNeuronIndex = 0; anotherInputNeuronIndex < DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; anotherInputNeuronIndex++)
-                                                {
-                                                    const unsigned long long synapse = synapses[processorNumber].input[offset >> 5] >> ((offset & 31) << 1);
-                                                    offset++;
-                                                    if (synapse & 1)
-                                                    {
-                                                        counters[((neurons[processorNumber].input[anotherInputNeuronIndex >> 6] >> (anotherInputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
-                                                    }
-                                                }
-                                                if (counters[0] > counters[1])
-                                                {
-                                                    neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] &= ~(1ULL << (inputNeuronIndex & 63));
-                                                }
-                                                else
-                                                {
-                                                    neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] |= (1ULL << (inputNeuronIndex & 63));
-                                                }
-                                            }
-                                        }
-
-                                        bs->CopyMem(&neurons[processorNumber].output[0], &neurons[processorNumber].input[(DATA_LENGTH + NUMBER_OF_INPUT_NEURONS) / 64], INFO_LENGTH / 8);
-
-                                        for (unsigned int tick = 0; tick < MAX_OUTPUT_DURATION; tick++)
-                                        {
-                                            unsigned int offset = 0;
-                                            for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
-                                            {
-                                                unsigned int counters[2];
-                                                *((long long*)counters) = 0;
-                                                for (unsigned int anotherOutputNeuronIndex = 0; anotherOutputNeuronIndex < INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; anotherOutputNeuronIndex++)
-                                                {
-                                                    const unsigned long long synapse = synapses[processorNumber].output[offset >> 5] >> ((offset & 31) << 1);
-                                                    offset++;
-                                                    if (synapse & 1)
-                                                    {
-                                                        counters[((neurons[processorNumber].output[anotherOutputNeuronIndex >> 6] >> (anotherOutputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
-                                                    }
-                                                }
-                                                if (counters[0] > counters[1])
-                                                {
-                                                    neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] &= ~(1ULL << (outputNeuronIndex & 63));
-                                                }
-                                                else
-                                                {
-                                                    neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] |= (1ULL << (outputNeuronIndex & 63));
-                                                }
-                                            }
-                                        }
-
-                                        unsigned int score = 0;
-
-                                        for (unsigned int i = 0; i < DATA_LENGTH / 64; i++)
-                                        {
-                                            score += (64 - __popcnt64(miningData[i] ^ neurons[processorNumber].output[(INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS) / 64 + i]));
-                                        }
-
-                                        if (score >= SOLUTION_THRESHOLD
-                                            && system.numberOfSolutions < MAX_NUMBER_OF_SOLUTIONS)
+                                        if (system.numberOfSolutions < MAX_NUMBER_OF_SOLUTIONS
+                                            && score(processorNumber, request->destinationPublicKey, &((unsigned char*)request)[sizeof(Message)]) >= SOLUTION_THRESHOLD)
                                         {
                                             ACQUIRE(solutionsLock);
 
@@ -7529,84 +7542,7 @@ static void processTick(unsigned long long processorNumber)
                                         {
                                             minerSolutionFlags[flagIndex >> 6] |= (1ULL << (flagIndex & 63));
 
-                                            random(transaction->sourcePublicKey, ((unsigned char*)transaction) + sizeof(Transaction), (unsigned char*)&synapses[processorNumber], sizeof(synapses[0]));
-                                            for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
-                                            {
-                                                const unsigned int offset = inputNeuronIndex * (DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH) + (DATA_LENGTH + inputNeuronIndex);
-                                                synapses[processorNumber].input[offset >> 5] &= ~(3ULL << (offset & 31));
-                                            }
-                                            for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
-                                            {
-                                                const unsigned int offset = outputNeuronIndex * (INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH) + (INFO_LENGTH + outputNeuronIndex);
-                                                synapses[processorNumber].output[offset >> 5] &= ~(3ULL << (offset & 31));
-                                            }
-
-                                            bs->CopyMem(&neurons[processorNumber].input[0], &miningData, sizeof(miningData));
-                                            bs->SetMem(&neurons[processorNumber].input[sizeof(miningData) / 8], sizeof(neurons[0]) - sizeof(miningData), 0);
-
-                                            for (unsigned int tick = 0; tick < MAX_INPUT_DURATION; tick++)
-                                            {
-                                                unsigned int offset = 0;
-                                                for (unsigned int inputNeuronIndex = 0; inputNeuronIndex < NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; inputNeuronIndex++)
-                                                {
-                                                    unsigned int counters[2];
-                                                    *((long long*)counters) = 0;
-                                                    for (unsigned int anotherInputNeuronIndex = 0; anotherInputNeuronIndex < DATA_LENGTH + NUMBER_OF_INPUT_NEURONS + INFO_LENGTH; anotherInputNeuronIndex++)
-                                                    {
-                                                        const unsigned long long synapse = synapses[processorNumber].input[offset >> 5] >> ((offset & 31) << 1);
-                                                        offset++;
-                                                        if (synapse & 1)
-                                                        {
-                                                            counters[((neurons[processorNumber].input[anotherInputNeuronIndex >> 6] >> (anotherInputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
-                                                        }
-                                                    }
-                                                    if (counters[0] > counters[1])
-                                                    {
-                                                        neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] &= ~(1ULL << (inputNeuronIndex & 63));
-                                                    }
-                                                    else
-                                                    {
-                                                        neurons[processorNumber].input[DATA_LENGTH / 64 + (inputNeuronIndex >> 6)] |= (1ULL << (inputNeuronIndex & 63));
-                                                    }
-                                                }
-                                            }
-
-                                            bs->CopyMem(&neurons[processorNumber].output[0], &neurons[processorNumber].input[(DATA_LENGTH + NUMBER_OF_INPUT_NEURONS) / 64], INFO_LENGTH / 8);
-
-                                            for (unsigned int tick = 0; tick < MAX_OUTPUT_DURATION; tick++)
-                                            {
-                                                unsigned int offset = 0;
-                                                for (unsigned int outputNeuronIndex = 0; outputNeuronIndex < NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; outputNeuronIndex++)
-                                                {
-                                                    unsigned int counters[2];
-                                                    *((long long*)counters) = 0;
-                                                    for (unsigned int anotherOutputNeuronIndex = 0; anotherOutputNeuronIndex < INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS + DATA_LENGTH; anotherOutputNeuronIndex++)
-                                                    {
-                                                        const unsigned long long synapse = synapses[processorNumber].output[offset >> 5] >> ((offset & 31) << 1);
-                                                        offset++;
-                                                        if (synapse & 1)
-                                                        {
-                                                            counters[((neurons[processorNumber].output[anotherOutputNeuronIndex >> 6] >> (anotherOutputNeuronIndex & 63)) & 1) == ((synapse >> 1) & 1)]++;
-                                                        }
-                                                    }
-                                                    if (counters[0] > counters[1])
-                                                    {
-                                                        neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] &= ~(1ULL << (outputNeuronIndex & 63));
-                                                    }
-                                                    else
-                                                    {
-                                                        neurons[processorNumber].output[INFO_LENGTH / 64 + (outputNeuronIndex >> 6)] |= (1ULL << (outputNeuronIndex & 63));
-                                                    }
-                                                }
-                                            }
-
-                                            unsigned int score = 0;
-
-                                            for (unsigned int i = 0; i < DATA_LENGTH / 64; i++)
-                                            {
-                                                score += (64 - __popcnt64(miningData[i] ^ neurons[processorNumber].output[(INFO_LENGTH + NUMBER_OF_OUTPUT_NEURONS) / 64 + i]));
-                                            }
-
+                                            const unsigned int score = ::score(processorNumber, transaction->sourcePublicKey, ((unsigned char*)transaction) + sizeof(Transaction));
                                             if (score >= SOLUTION_THRESHOLD)
                                             {
                                                 __m256i minerSolutionDigest;
@@ -8154,9 +8090,9 @@ static void endEpoch()
     UNIVERSE_FILE_NAME[sizeof(UNIVERSE_FILE_NAME) / sizeof(UNIVERSE_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
     universeMustBeSaved = true;
 
-    COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
-    COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
-    COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
+    CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
+    CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
+    CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
     computerMustBeSaved = true;
 
     broadcastedComputors.broadcastComputors.computors.epoch = 0;
@@ -8864,45 +8800,89 @@ static void computationProcessorShutdownCallback(EFI_EVENT Event, void* Context)
     computationProcessorState = 0;
 }
 
+static long long load(CHAR16* fileName, unsigned long long totalSize, unsigned char* buffer)
+{
+    EFI_STATUS status;
+    EFI_FILE_PROTOCOL* file;
+    if (status = root->Open(root, (void**)&file, fileName, EFI_FILE_MODE_READ, 0))
+    {
+        logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
+
+        return -1;
+    }
+    else
+    {
+        long long readSize = 0;
+        while (readSize < totalSize)
+        {
+            unsigned long long size = (READING_CHUNK_SIZE <= (totalSize - readSize) ? READING_CHUNK_SIZE : (totalSize - readSize));
+            status = file->Read(file, &size, &buffer[readSize]);
+            if (status
+                || size != (READING_CHUNK_SIZE <= (totalSize - readSize) ? READING_CHUNK_SIZE : (totalSize - readSize)))
+            {
+                logStatus(L"EFI_FILE_PROTOCOL.Read() fails", status, __LINE__);
+
+                file->Close(file);
+
+                return -1;
+            }
+            readSize += size;
+        }
+        file->Close(file);
+
+        return readSize;
+    }
+}
+
+static long long save(CHAR16* fileName, unsigned long long totalSize, unsigned char* buffer)
+{
+    EFI_STATUS status;
+    EFI_FILE_PROTOCOL* file;
+    if (status = root->Open(root, (void**)&file, fileName, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0))
+    {
+        logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
+
+        return -1;
+    }
+    else
+    {
+        long long writtenSize = 0;
+        while (writtenSize < totalSize)
+        {
+            unsigned long long size = (WRITING_CHUNK_SIZE <= (totalSize - writtenSize) ? WRITING_CHUNK_SIZE : (totalSize - writtenSize));
+            status = file->Write(file, &size, &buffer[writtenSize]);
+            if (status
+                || size != (WRITING_CHUNK_SIZE <= (totalSize - writtenSize) ? WRITING_CHUNK_SIZE : (totalSize - writtenSize)))
+            {
+                logStatus(L"EFI_FILE_PROTOCOL.Write() fails", status, __LINE__);
+
+                file->Close(file);
+
+                return -1;
+            }
+            writtenSize += size;
+        }
+        file->Close(file);
+
+        return writtenSize;
+    }
+}
+
 static void saveSpectrum()
 {
     const unsigned long long beginningTick = __rdtsc();
 
-    EFI_FILE_PROTOCOL* dataFile;
-    EFI_STATUS status;
-    if (status = root->Open(root, (void**)&dataFile, (CHAR16*)SPECTRUM_FILE_NAME, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0))
+    ACQUIRE(spectrumLock);
+    long long savedSize = save(SPECTRUM_FILE_NAME, SPECTRUM_CAPACITY * sizeof(Entity), (unsigned char*)spectrum);
+    RELEASE(spectrumLock);
+
+    if (savedSize == SPECTRUM_CAPACITY * sizeof(Entity))
     {
-        logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
-    }
-    else
-    {
-        ACQUIRE(spectrumLock);
-
-        unsigned long long writtenSize = 0;
-        while (writtenSize < SPECTRUM_CAPACITY * sizeof(Entity))
-        {
-            unsigned long long size = SPECTRUM_WRITING_CHUNK_SIZE;
-            status = dataFile->Write(dataFile, &size, &spectrum[writtenSize / sizeof(Entity)]);
-            if (status
-                || size != SPECTRUM_WRITING_CHUNK_SIZE)
-            {
-                logStatus(L"EFI_FILE_PROTOCOL.Write() fails", status, __LINE__);
-
-                break;
-            }
-            writtenSize += size;
-        }
-        dataFile->Close(dataFile);
-        if (writtenSize == SPECTRUM_CAPACITY * sizeof(Entity))
-        {
-            setNumber(message, writtenSize, TRUE);
-            appendText(message, L" bytes of the spectrum data are saved (");
-            appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
-            appendText(message, L" microseconds).");
-            log(message);
-        }
-
-        RELEASE(spectrumLock);
+        setNumber(message, savedSize, TRUE);
+        appendText(message, L" bytes of the spectrum data are saved (");
+        appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
+        appendText(message, L" microseconds).");
+        log(message);
     }
 }
 
@@ -8910,41 +8890,17 @@ static void saveUniverse()
 {
     const unsigned long long beginningTick = __rdtsc();
 
-    EFI_FILE_PROTOCOL* dataFile;
-    EFI_STATUS status;
-    if (status = root->Open(root, (void**)&dataFile, (CHAR16*)UNIVERSE_FILE_NAME, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0))
+    ACQUIRE(universeLock);
+    long long savedSize = save(UNIVERSE_FILE_NAME, ASSETS_CAPACITY * sizeof(Asset), (unsigned char*)assets);
+    RELEASE(universeLock);
+
+    if (savedSize == ASSETS_CAPACITY * sizeof(Asset))
     {
-        logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
-    }
-    else
-    {
-        ACQUIRE(universeLock);
-
-        unsigned long long writtenSize = 0;
-        while (writtenSize < ASSETS_CAPACITY * sizeof(Asset))
-        {
-            unsigned long long size = ASSETS_WRITING_CHUNK_SIZE;
-            status = dataFile->Write(dataFile, &size, &assets[writtenSize / sizeof(Asset)]);
-            if (status
-                || size != ASSETS_WRITING_CHUNK_SIZE)
-            {
-                logStatus(L"EFI_FILE_PROTOCOL.Write() fails", status, __LINE__);
-
-                break;
-            }
-            writtenSize += size;
-        }
-        dataFile->Close(dataFile);
-        if (writtenSize == ASSETS_CAPACITY * sizeof(Asset))
-        {
-            setNumber(message, writtenSize, TRUE);
-            appendText(message, L" bytes of the universe data are saved (");
-            appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
-            appendText(message, L" microseconds).");
-            log(message);
-        }
-
-        RELEASE(universeLock);
+        setNumber(message, savedSize, TRUE);
+        appendText(message, L" bytes of the universe data are saved (");
+        appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
+        appendText(message, L" microseconds).");
+        log(message);
     }
 }
 
@@ -8952,85 +8908,50 @@ static void saveComputer()
 {
     const unsigned long long beginningTick = __rdtsc();
 
-    EFI_FILE_PROTOCOL* dataFile;
-    EFI_STATUS status;
-    if (status = root->Open(root, (void**)&dataFile, (CHAR16*)COMPUTER_FILE_NAME, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE, 0))
+    bool ok = true;
+    unsigned long long totalSize = 0;
+
+    ACQUIRE(computerLock);
+
+    for (unsigned int contractIndex = 0; contractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); contractIndex++)
     {
-        logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 9] = contractIndex / 1000 + L'0';
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 8] = (contractIndex % 1000) / 100 + L'0';
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 7] = (contractIndex % 100) / 10 + L'0';
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 6] = contractIndex % 10 + L'0';
+        long long savedSize = save(CONTRACT_FILE_NAME, contractDescriptions[contractIndex].stateSize, contractStates[contractIndex]);
+        totalSize += savedSize;
+        if (savedSize != contractDescriptions[contractIndex].stateSize)
+        {
+            ok = false;
+
+            break;
+        }
     }
-    else
+
+    RELEASE(computerLock);
+
+    if (ok)
     {
-        ACQUIRE(computerLock);
-
-        unsigned long long writtenSize = 0;
-        for (unsigned int contractIndex = 0; contractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); contractIndex++)
-        {
-            unsigned long long remainingSize = contractDescriptions[contractIndex].stateSize;
-            while (remainingSize)
-            {
-                unsigned long long size = remainingSize < WRITING_CHUNK_SIZE ? remainingSize : WRITING_CHUNK_SIZE;
-                status = dataFile->Write(dataFile, &size, contractStates[contractIndex] + (contractDescriptions[contractIndex].stateSize - remainingSize));
-                if (status
-                    || size != (remainingSize < WRITING_CHUNK_SIZE ? remainingSize : WRITING_CHUNK_SIZE))
-                {
-                    logStatus(L"EFI_FILE_PROTOCOL.Write() fails", status, __LINE__);
-
-                    break;
-                }
-                remainingSize -= size;
-                writtenSize += size;
-            }
-            if (remainingSize)
-            {
-                break;
-            }
-        }
-        dataFile->Close(dataFile);
-        unsigned long long expectedWrittenSize = 0;
-        for (unsigned int contractIndex = 0; contractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); contractIndex++)
-        {
-            expectedWrittenSize += contractDescriptions[contractIndex].stateSize;
-        }
-        if (writtenSize == expectedWrittenSize)
-        {
-            setNumber(message, writtenSize, TRUE);
-            appendText(message, L" bytes of the computer data are saved (");
-            appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
-            appendText(message, L" microseconds).");
-            log(message);
-        }
-
-        RELEASE(computerLock);
+        setNumber(message, totalSize, TRUE);
+        appendText(message, L" bytes of the computer data are saved (");
+        appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
+        appendText(message, L" microseconds).");
+        log(message);
     }
 }
 
 static void saveSystem()
 {
     const unsigned long long beginningTick = __rdtsc();
-
-    EFI_FILE_PROTOCOL* dataFile;
-    EFI_STATUS status;
-    if (status = root->Open(root, (void**)&dataFile, (CHAR16*)SYSTEM_FILE_NAME, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE, 0))
+    long long savedSize = save(SYSTEM_FILE_NAME, sizeof(system), (unsigned char*)&system);
+    if (savedSize == sizeof(system))
     {
-        logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
-    }
-    else
-    {
-        unsigned long long size = sizeof(system);
-        status = dataFile->Write(dataFile, &size, &system);
-        dataFile->Close(dataFile);
-        if (status)
-        {
-            logStatus(L"EFI_FILE_PROTOCOL.Write() fails", status, __LINE__);
-        }
-        else
-        {
-            setNumber(message, size, TRUE);
-            appendText(message, L" bytes of the system data are saved (");
-            appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
-            appendText(message, L" microseconds).");
-            log(message);
-        }
+        setNumber(message, savedSize, TRUE);
+        appendText(message, L" bytes of the system data are saved (");
+        appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
+        appendText(message, L" microseconds).");
+        log(message);
     }
 }
 
@@ -9339,98 +9260,45 @@ static bool initialize()
         bs->SetMem(contractStateChangeFlags, MAX_NUMBER_OF_CONTRACTS / 8, 0xFF);
         bs->SetMem(functionFlags, 536870912, 0);
 
-        EFI_FILE_PROTOCOL* dataFile;
-
-        if (status = root->Open(root, (void**)&dataFile, (CHAR16*)SYSTEM_FILE_NAME, EFI_FILE_MODE_READ, 0))
+        bs->SetMem(&system, sizeof(system), 0);
+        load(SYSTEM_FILE_NAME, sizeof(system), (unsigned char*)&system);
+        system.version = VERSION_B;
+        system.epoch = EPOCH;
+        system.initialHour = 12;
+        system.initialDay = 13;
+        system.initialMonth = 4;
+        system.initialYear = 22;
+        if (system.epoch == EPOCH)
         {
-            logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
-
-            return false;
+            system.initialTick = TICK;
         }
-        else
-        {
-            bs->SetMem(&system, sizeof(system), 0);
+        system.tick = system.initialTick;
 
-            unsigned long long size = sizeof(system);
-            status = dataFile->Read(dataFile, &size, &system);
-            dataFile->Close(dataFile);
-            if (status)
-            {
-                logStatus(L"EFI_FILE_PROTOCOL.Read() fails", status, __LINE__);
+        etalonTick.epoch = system.epoch;
+        etalonTick.tick = system.initialTick;
+        etalonTick.millisecond = system.initialMillisecond;
+        etalonTick.second = system.initialSecond;
+        etalonTick.minute = system.initialMinute;
+        etalonTick.hour = system.initialHour;
+        etalonTick.day = system.initialDay;
+        etalonTick.month = system.initialMonth;
+        etalonTick.year = system.initialYear;
 
-                return false;
-            }
-            else
-            {
-                system.version = VERSION_B;
-
-                if (!size)
-                {
-                    system.epoch = EPOCH;
-                    system.initialHour = 12;
-                    system.initialDay = 13;
-                    system.initialMonth = 4;
-                    system.initialYear = 22;
-                }
-
-                if (system.epoch == EPOCH)
-                {
-                    system.initialTick = system.tick = TICK;
-                }
-                else
-                {
-                    system.tick = system.initialTick;
-                }
-
-                etalonTick.epoch = system.epoch;
-                etalonTick.tick = system.initialTick;
-                etalonTick.millisecond = system.initialMillisecond;
-                etalonTick.second = system.initialSecond;
-                etalonTick.minute = system.initialMinute;
-                etalonTick.hour = system.initialHour;
-                etalonTick.day = system.initialDay;
-                etalonTick.month = system.initialMonth;
-                etalonTick.year = system.initialYear;
-
-                bs->SetMem(solutionPublicationTicks, sizeof(solutionPublicationTicks), 0);
-            }
-        }
+        bs->SetMem(solutionPublicationTicks, sizeof(solutionPublicationTicks), 0);
 
         bs->SetMem(faultyComputorFlags, sizeof(faultyComputorFlags), 0);
 
         SPECTRUM_FILE_NAME[sizeof(SPECTRUM_FILE_NAME) / sizeof(SPECTRUM_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
         SPECTRUM_FILE_NAME[sizeof(SPECTRUM_FILE_NAME) / sizeof(SPECTRUM_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
         SPECTRUM_FILE_NAME[sizeof(SPECTRUM_FILE_NAME) / sizeof(SPECTRUM_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
-        if (status = root->Open(root, (void**)&dataFile, (CHAR16*)SPECTRUM_FILE_NAME, EFI_FILE_MODE_READ, 0))
+        long long loadedSize = load(SPECTRUM_FILE_NAME, SPECTRUM_CAPACITY * sizeof(Entity), (unsigned char*)spectrum);
+        if (loadedSize != SPECTRUM_CAPACITY * sizeof(Entity))
         {
-            logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
+            logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", loadedSize, __LINE__);
 
             return false;
         }
-        else
         {
-            unsigned long long readSize = 0;
-            while (readSize < SPECTRUM_CAPACITY * sizeof(Entity))
-            {
-                unsigned long long size = SPECTRUM_READING_CHUNK_SIZE;
-                status = dataFile->Read(dataFile, &size, &spectrum[readSize / sizeof(Entity)]);
-                if (status
-                    || size != SPECTRUM_READING_CHUNK_SIZE)
-                {
-                    logStatus(L"EFI_FILE_PROTOCOL.Read() fails", status, __LINE__);
-
-                    break;
-                }
-                readSize += size;
-            }
-            dataFile->Close(dataFile);
-            if (readSize != SPECTRUM_CAPACITY * sizeof(Entity))
-            {
-                logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", readSize, __LINE__);
-
-                return false;
-            }
-
             const unsigned long long beginningTick = __rdtsc();
 
             unsigned int digestIndex;
@@ -9483,36 +9351,14 @@ static bool initialize()
         UNIVERSE_FILE_NAME[sizeof(UNIVERSE_FILE_NAME) / sizeof(UNIVERSE_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
         UNIVERSE_FILE_NAME[sizeof(UNIVERSE_FILE_NAME) / sizeof(UNIVERSE_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
         UNIVERSE_FILE_NAME[sizeof(UNIVERSE_FILE_NAME) / sizeof(UNIVERSE_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
-        if (status = root->Open(root, (void**)&dataFile, (CHAR16*)UNIVERSE_FILE_NAME, EFI_FILE_MODE_READ, 0))
+        loadedSize = load(UNIVERSE_FILE_NAME, ASSETS_CAPACITY * sizeof(Asset), (unsigned char*)assets);
+        if (loadedSize != ASSETS_CAPACITY * sizeof(Asset))
         {
-            logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
+            logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", loadedSize, __LINE__);
 
             return false;
         }
-        else
         {
-            unsigned long long readSize = 0;
-            while (readSize < ASSETS_CAPACITY * sizeof(Asset))
-            {
-                unsigned long long size = ASSETS_READING_CHUNK_SIZE;
-                status = dataFile->Read(dataFile, &size, &assets[readSize / sizeof(Asset)]);
-                if (status
-                    || size != ASSETS_READING_CHUNK_SIZE)
-                {
-                    logStatus(L"EFI_FILE_PROTOCOL.Read() fails", status, __LINE__);
-
-                    break;
-                }
-                readSize += size;
-            }
-            dataFile->Close(dataFile);
-            if (readSize != ASSETS_CAPACITY * sizeof(Asset))
-            {
-                logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", readSize, __LINE__);
-
-                return false;
-            }
-
             setText(message, L"Universe digest = ");
             __m256i digest;
             getUniverseDigest(&digest);
@@ -9523,53 +9369,33 @@ static bool initialize()
             log(message);
         }
 
-        COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
-        COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
-        COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
-        if (status = root->Open(root, (void**)&dataFile, (CHAR16*)COMPUTER_FILE_NAME, EFI_FILE_MODE_READ, 0))
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
+        CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
+        for (unsigned int contractIndex = 0; contractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); contractIndex++)
         {
-            logStatus(L"EFI_FILE_PROTOCOL.Open() fails", status, __LINE__);
-
-            return false;
-        }
-        else
-        {
-            for (unsigned int contractIndex = 0; contractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); contractIndex++)
+            if (contractDescriptions[contractIndex].constructionEpoch == system.epoch)
             {
-                unsigned long long size = contractDescriptions[contractIndex].stateSize;
-                if (contractDescriptions[contractIndex].constructionEpoch == system.epoch)
+                bs->SetMem(contractStates[contractIndex], contractDescriptions[contractIndex].stateSize, 0);
+            }
+            else
+            {
+                CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 9] = contractIndex / 1000 + L'0';
+                CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 8] = (contractIndex % 1000) / 100 + L'0';
+                CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 7] = (contractIndex % 100) / 10 + L'0';
+                CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 6] = contractIndex % 10 + L'0';
+                loadedSize = load(CONTRACT_FILE_NAME, contractDescriptions[contractIndex].stateSize, contractStates[contractIndex]);
+                if (loadedSize != contractDescriptions[contractIndex].stateSize)
                 {
-                    bs->SetMem(contractStates[contractIndex], size, 0);
+                    logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", loadedSize, __LINE__);
+
+                    return false;
                 }
-                else
-                {
-                    status = dataFile->Read(dataFile, &size, contractStates[contractIndex]);
-                    if (status)
-                    {
-                        logStatus(L"EFI_FILE_PROTOCOL.Read() fails", status, __LINE__);
-
-                        dataFile->Close(dataFile);
-
-                        return false;
-                    }
-                    else
-                    {
-                        if (size != contractDescriptions[contractIndex].stateSize)
-                        {
-                            logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", size, __LINE__);
-
-                            dataFile->Close(dataFile);
-
-                            return false;
-                        }
-                    }
-                }
-
-                initializeContract(contractIndex, contractStates[contractIndex]);
             }
 
-            dataFile->Close(dataFile);
-
+            initializeContract(contractIndex, contractStates[contractIndex]);
+        }
+        {
             setText(message, L"Computer digest = ");
             __m256i digest;
             getComputerDigest(&digest);
@@ -9580,20 +9406,18 @@ static bool initialize()
             log(message);
         }
 
-        system.tick = system.initialTick;
-
         minerSolutionsDigest = ZERO;
 
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
-         randomSeed[0] = 28;
-		 randomSeed[1] = 0;
-		 randomSeed[2] = 7;
-		 randomSeed[3] = 69;
-		 randomSeed[4] = 255;
-		 randomSeed[5] = 0;
-		 randomSeed[6] = 73;
-		 randomSeed[7] = 77;
+        randomSeed[0] = 99;
+        randomSeed[1] = 23;
+        randomSeed[2] = 147;
+        randomSeed[3] = 2;
+        randomSeed[4] = 202;
+        randomSeed[5] = 0;
+        randomSeed[6] = 0;
+        randomSeed[7] = 0;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
@@ -9978,12 +9802,6 @@ static void processKeyPresses()
     {
         switch (key.ScanCode)
         {
-        case 0x0B:
-        {
-            log(L"[F4] Close all connections | [Pause] Toggle logging | [ESC] Shut down.");
-        }
-        break;
-
         case 0x0C:
         {
             setText(message, L"Qubic ");
@@ -10249,9 +10067,9 @@ static void processKeyPresses()
             UNIVERSE_FILE_NAME[sizeof(UNIVERSE_FILE_NAME) / sizeof(UNIVERSE_FILE_NAME[0]) - 2] = L'0';
             saveUniverse();
 
-            COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 4] = L'0';
-            COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 3] = L'0';
-            COMPUTER_FILE_NAME[sizeof(COMPUTER_FILE_NAME) / sizeof(COMPUTER_FILE_NAME[0]) - 2] = L'0';
+            CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 4] = L'0';
+            CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 3] = L'0';
+            CONTRACT_FILE_NAME[sizeof(CONTRACT_FILE_NAME) / sizeof(CONTRACT_FILE_NAME[0]) - 2] = L'0';
             saveComputer();
         }
         break;
@@ -10602,6 +10420,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                                                                 {
                                                                     requestQueueBufferHead = 0;
                                                                 }
+                                                                // TODO: Place a fence
                                                                 requestQueueElementHead++;
 
                                                                 if (!(--dejavuSwapCounter))
@@ -10879,6 +10698,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                                 {
                                     responseQueueBufferTail = 0;
                                 }
+                                // TODO: Place a fence
                                 responseQueueElementTail++;
                             }
                         }
