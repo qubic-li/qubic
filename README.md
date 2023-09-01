@@ -17,9 +17,19 @@ To run a qubic node, you need the following parts:
 # sample command in linux
 mkfs.fat -F 32 -n QUBIC /dev/sda
 ```
+if you have a disk and want to use partitions, this is possible too. use `gdisk`.
+```bash
+gdisk /dev/sda
+# remove all existing partition with d command
+# add the qubic partition with n command
+# it is recommended to use <1TB of partition size; let be the start sector. end sector can be specified with size. eg: 200G.
+# set the type of partition to ef00
+```
 2. We recommend to have this structure on the disk.
 ```
-/computer.XXX
+/contract.000.XXX
+/contract.001.XXX
+/contract.002.XXX
 /spectrum.XXX
 /system
 /universe.XXX
@@ -28,7 +38,9 @@ mkfs.fat -F 32 -n QUBIC /dev/sda
 /efi/boot/startup.nsh
 /efi/boot/Qubic.efi
 ```
-- computer.XXX => must be the current computer file. XXX must be replaced with current epoch. (e.g `computer.068`)
+- contract.000.XXX => must be the current contract.000 file. XXX must be replaced with current epoch. (e.g `computer.068`)
+- contract.001.XXX => must be the current contract.001 file. XXX must be replaced with current epoch. (e.g `computer.068`). Data from Qx.
+- contract.002.XXX => must be the current contract.002 file. XXX must be replaced with current epoch. (e.g `computer.068`). Data from Quottery.
 - universe.XXX => must be the current universe file. XXX must be replaced with current epoch. (e.g `universe.068`)
 - spectrum.XXX => must be the current spectrum file. XXX must be replaced with current epoch. (e.g `spectrum.068`)
 - system => to start from scratch, use an empty file. (e.g. `touch system`)
@@ -47,7 +59,7 @@ Qubic.efi
 ```
 
 - `timezone -s 00:00` sets the timezone to utc
-- `ifconfig -s eth0 dhcp` tells the efi to get an ip address from dhcp
+- `ifconfig -s eth0 dhcp` tells the efi to get an ip address from dhcp; if you want to set a fixed ip you can use `ifconfig -s eth0 static <IP> <SUBNETMASK> <GATEWAY>`
 - `fs0:` changes to drive 0
 - `Qubic.efi` starts qubic
 
@@ -55,6 +67,7 @@ Qubic.efi
 
 > to make it easier, you can copy & paste our prepared initial disk from https://github.com/qubic-li/qubic/blob/main/qubic-initial-disk.zip
 
+> if you have multiple network interfaces you may disconnect these befor starting qubic.
 
 ## General Process of deploying a node
 1. Find knownPublicPeers public peers (e.g. from: https://app.qubic.li/network/live)
