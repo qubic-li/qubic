@@ -6,10 +6,10 @@ To run a qubic node, you need the following parts:
 - Bare Metal Server/Computer with at least 8 Cores (high CPU frequency with AVX2 support)
 - At least 128GB memory
 - 1Gb/s synchronous internet connection
-- An USB Stick or SSD/HD attached to the Computer
+- An USB Stick or SSD/HD attached to the Computer via USB
 - An UEFI Bios
 
-> you will need the current `spectrum, universe and computer` files to be able to start qubic. the latest files can be found in our discord channel: https://discord.gg/qubic
+> you will need the current `spectrum, universe and contract` files to be able to start qubic. the latest files can be found in our #network discord channel: https://discord.gg/qubic (ask there for the files)
 
 ### Prepare your USB Stick/SSD/HD
 1. Your Qubic Boot device should be formatted as FAT32 and have the label QUBIC.
