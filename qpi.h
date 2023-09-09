@@ -6748,6 +6748,16 @@ namespace QPI
 
 	//////////
 
+	struct Entity
+	{
+		id id;
+		sint64 incomingAmount, outgoingAmount;
+		uint32 numberOfIncomingTransfers, numberOfOutgoingTransfers;
+		uint32 latestIncomingTransferTick, latestOutgoingTransferTick;
+	};
+
+	//////////
+
 	static id arbitrator(
 	) {
 		return ::__arbitrator();
@@ -6777,6 +6787,13 @@ namespace QPI
 		return ::__epoch();
 	}
 
+	static bit getEntity(
+		id id,
+		::Entity& entity
+	) { // Returns "true" if the entity has been found, returns "false" otherwise
+		return ::__getEntity(id, entity);
+	}
+
 	static uint8 hour(
 	) { // [0..23]
 		return ::__hour();
@@ -6785,6 +6802,16 @@ namespace QPI
 	static uint16 millisecond(
 	) { // [0..999]
 		return ::__millisecond();
+	}
+
+	static uint32 minCandidateScore(
+	) {
+		return ::__minCandidateScore();
+	}
+
+	static uint32 minComputorScore(
+	) {
+		return ::__minComputorScore();
 	}
 
 	static uint8 minute(
@@ -6828,21 +6855,21 @@ namespace QPI
 
 	//////////
 
-	#define PRIVATE(function) private: static void function(CONTRACT_STATE_TYPE* s, function##_input* i, function##_output* o) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define PRIVATE(function) private: static void function(CONTRACT_STATE_TYPE& s, function##_input& i, function##_output& o) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
-	#define PUBLIC(function) public: static void function(CONTRACT_STATE_TYPE* s, function##_input* i, function##_output* o) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define PUBLIC(function) public: static void function(CONTRACT_STATE_TYPE& s, function##_input& i, function##_output& o) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
 	#define REGISTER_FUNCTIONS_FOR_USERS public: static void __registerFunctionsForUsers() { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
-	#define INITIALIZE public: static void __initialize(CONTRACT_STATE_TYPE* s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define INITIALIZE public: static void __initialize(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
-	#define BEGIN_EPOCH public: static void __beginEpoch(CONTRACT_STATE_TYPE* s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define BEGIN_EPOCH public: static void __beginEpoch(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
-	#define END_EPOCH public: static void __endEpoch(CONTRACT_STATE_TYPE* s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define END_EPOCH public: static void __endEpoch(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
-	#define BEGIN_TICK public: static void __beginTick(CONTRACT_STATE_TYPE* s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define BEGIN_TICK public: static void __beginTick(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
-	#define END_TICK public: static void __endTick(CONTRACT_STATE_TYPE* s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define END_TICK public: static void __endTick(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
 
 	#define _ ::__endFunction(__functionId); }
 

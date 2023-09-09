@@ -29,10 +29,10 @@ public:
 
 		// No need to initialize _earnedAmount and other variables with 0, whole contract state is zeroed before initialization is invoked
 
-		s->_assetIssuanceFee = 1000000000;
-		s->_transferFee = 1000000;
-		s->_tradeFee = 5000000; // 0.5%
-		_
+		s._assetIssuanceFee = 1000000000;
+		s._transferFee = 1000000;
+		s._tradeFee = 5000000; // 0.5%
+	_
 
 	BEGIN_EPOCH
 	_

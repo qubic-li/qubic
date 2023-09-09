@@ -2,6 +2,14 @@
 
 ////////// Smart contracts \\\\\\\\\\
 
+struct Entity
+{
+    unsigned char publicKey[32];
+    long long incomingAmount, outgoingAmount;
+    unsigned int numberOfIncomingTransfers, numberOfOutgoingTransfers;
+    unsigned int latestIncomingTransferTick, latestOutgoingTransferTick;
+};
+
 static void __beginFunction(const unsigned int);
 static void __endFunction(const unsigned int);
 static __m256i __arbitrator();
@@ -9,8 +17,11 @@ static __m256i __computor(unsigned short);
 static unsigned char __day();
 static unsigned char __dayOfWeek(unsigned char, unsigned char, unsigned char);
 static unsigned short __epoch();
+static bool __getEntity(__m256i, ::Entity&);
 static unsigned char __hour();
 static unsigned short __millisecond();
+static unsigned int __minCandidateScore();
+static unsigned int __minComputorScore();
 static unsigned char __minute();
 static unsigned char __month();
 static __m256i __nextId(__m256i);
@@ -109,11 +120,11 @@ static const unsigned char knownPublicPeers[][4] = {
 #define AVX512 0
 
 #define VERSION_A 1
-#define VERSION_B 166
+#define VERSION_B 168
 #define VERSION_C 0
 
-#define EPOCH 71
-#define TICK 8100000
+#define EPOCH 73
+#define TICK 0
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
@@ -126,9 +137,9 @@ static unsigned short CONTRACT_FILE_NAME[] = L"contract????.???";
 #define INFO_LENGTH 1000
 #define NUMBER_OF_INPUT_NEURONS 1000
 #define NUMBER_OF_OUTPUT_NEURONS 1000
-#define MAX_INPUT_DURATION 20
-#define MAX_OUTPUT_DURATION 20
-#define SOLUTION_THRESHOLD 1100
+#define MAX_INPUT_DURATION 30
+#define MAX_OUTPUT_DURATION 30
+#define SOLUTION_THRESHOLD 1120
 
 
 
@@ -4890,7 +4901,7 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define ASSETS_DEPTH 24 // Is derived from ASSETS_CAPACITY (=N)
 #define BUFFER_SIZE 4194304
 #define CONTRACT_STATES_DEPTH 10 // Is derived from MAX_NUMBER_OF_CONTRACTS (=N)
-#define TARGET_TICK_DURATION 5000
+#define TARGET_TICK_DURATION 2000
 #define TICK_REQUESTING_PERIOD 500
 #define DEJAVU_SWAP_LIMIT 1000000
 #define DISSEMINATION_MULTIPLIER 8
@@ -4948,14 +4959,6 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define METER 4
 #define MOLE 5
 #define SECOND 6
-
-struct Entity
-{
-    unsigned char publicKey[32];
-    long long incomingAmount, outgoingAmount;
-    unsigned int numberOfIncomingTransfers, numberOfOutgoingTransfers;
-    unsigned int latestIncomingTransferTick, latestOutgoingTransferTick;
-};
 
 struct Asset
 {
@@ -5291,7 +5294,7 @@ typedef struct
 
 typedef struct
 {
-    Entity entity;
+    ::Entity entity;
     unsigned int tick;
     int spectrumIndex;
     unsigned char siblings[SPECTRUM_DEPTH][32];
@@ -5451,7 +5454,7 @@ static unsigned int uniqueNextTickTransactionDigestCounters[NUMBER_OF_COMPUTORS]
 static void* reorgBuffer = NULL;
 
 static volatile char spectrumLock = 0;
-static Entity* spectrum = NULL;
+static ::Entity* spectrum = NULL;
 static unsigned int numberOfEntities = 0;
 static unsigned int numberOfTransactions = 0;
 static volatile char entityPendingTransactionsLock = 0;
@@ -5557,6 +5560,10 @@ static unsigned long long* minerSolutionFlags = NULL;
 static volatile unsigned char minerPublicKeys[MAX_NUMBER_OF_MINERS][32];
 static volatile unsigned int minerScores[MAX_NUMBER_OF_MINERS];
 static volatile unsigned int numberOfMiners = NUMBER_OF_COMPUTORS;
+static __m256i competitorPublicKeys[(NUMBER_OF_COMPUTORS - QUORUM) * 2];
+static unsigned int competitorScores[(NUMBER_OF_COMPUTORS - QUORUM) * 2];
+static bool competitorComputorStatuses[(NUMBER_OF_COMPUTORS - QUORUM) * 2];
+static unsigned int minimumComputorScore = 0, minimumCandidateScore = 0;
 
 BroadcastFutureTickData broadcastFutureTickData;
 
@@ -6540,7 +6547,7 @@ static void requestEntity(Peer* peer, Processor* processor, RequestResponseHeade
     }
     else
     {
-        bs->CopyMem(&packet.respondedEntity.entity, &spectrum[packet.respondedEntity.spectrumIndex], sizeof(Entity));
+        bs->CopyMem(&packet.respondedEntity.entity, &spectrum[packet.respondedEntity.spectrumIndex], sizeof(::Entity));
 
         int sibling = packet.respondedEntity.spectrumIndex;
         unsigned int spectrumDigestInputOffset = 0;
@@ -7277,6 +7284,35 @@ static unsigned short __epoch()
     return system.epoch;
 }
 
+static bool __getEntity(__m256i id, ::Entity& entity)
+{
+    int index = spectrumIndex((unsigned char*)&id);
+    if (index < 0)
+    {
+        *((__m256i*)&entity.publicKey) = id;
+        entity.incomingAmount = 0;
+        entity.outgoingAmount = 0;
+        entity.numberOfIncomingTransfers = 0;
+        entity.numberOfOutgoingTransfers = 0;
+        entity.latestIncomingTransferTick = 0;
+        entity.latestOutgoingTransferTick = 0;
+
+        return false;
+    }
+    else
+    {
+        *((__m256i*)&entity.publicKey) = *((__m256i*)&spectrum[index].publicKey);
+        entity.incomingAmount = spectrum[index].incomingAmount;
+        entity.outgoingAmount = spectrum[index].outgoingAmount;
+        entity.numberOfIncomingTransfers = spectrum[index].numberOfIncomingTransfers;
+        entity.numberOfOutgoingTransfers = spectrum[index].numberOfOutgoingTransfers;
+        entity.latestIncomingTransferTick = spectrum[index].latestIncomingTransferTick;
+        entity.latestOutgoingTransferTick = spectrum[index].latestOutgoingTransferTick;
+
+        return true;
+    }
+}
+
 static unsigned char __hour()
 {
     return etalonTick.hour;
@@ -7285,6 +7321,16 @@ static unsigned char __hour()
 static unsigned short __millisecond()
 {
     return etalonTick.millisecond;
+}
+
+static unsigned int __minCandidateScore()
+{
+    return minimumCandidateScore;
+}
+
+static unsigned int __minComputorScore()
+{
+    return minimumComputorScore;
 }
 
 static unsigned char __minute()
@@ -7376,6 +7422,20 @@ static void processTick(unsigned long long processorNumber)
             {
                 __computation = contractSystemFunctions[executedContractIndex][INITIALIZE];
                 
+                while (__computation)
+                {
+                    _mm_pause();
+                }
+            }
+        }
+
+        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+        {
+            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+            {
+                __computation = contractSystemFunctions[executedContractIndex][BEGIN_EPOCH];
+
                 while (__computation)
                 {
                     _mm_pause();
@@ -7607,6 +7667,64 @@ static void processTick(unsigned long long processorNumber)
                                                     *((__m256i*)minerPublicKeys[--minerIndex]) = tmpPublicKey;
                                                     minerScores[minerIndex] = tmpScore;
                                                 }
+
+                                                for (unsigned int i = 0; i < NUMBER_OF_COMPUTORS - QUORUM; i++)
+                                                {
+                                                    competitorPublicKeys[i] = *((__m256i*)minerPublicKeys[QUORUM + i]);
+                                                    competitorScores[i] = minerScores[QUORUM + i];
+                                                    competitorComputorStatuses[QUORUM + i] = true;
+
+                                                    if (NUMBER_OF_COMPUTORS + i < numberOfMiners)
+                                                    {
+                                                        competitorPublicKeys[i + (NUMBER_OF_COMPUTORS - QUORUM)] = *((__m256i*)minerPublicKeys[NUMBER_OF_COMPUTORS + i]);
+                                                        competitorScores[i + (NUMBER_OF_COMPUTORS - QUORUM)] = minerScores[NUMBER_OF_COMPUTORS + i];
+                                                    }
+                                                    else
+                                                    {
+                                                        competitorScores[i + (NUMBER_OF_COMPUTORS - QUORUM)] = 0;
+                                                    }
+                                                    competitorComputorStatuses[i + (NUMBER_OF_COMPUTORS - QUORUM)] = false;
+                                                }
+                                                for (unsigned int i = NUMBER_OF_COMPUTORS - QUORUM; i < (NUMBER_OF_COMPUTORS - QUORUM) * 2; i++)
+                                                {
+                                                    int j = i;
+                                                    const __m256i tmpPublicKey = competitorPublicKeys[j];
+                                                    const unsigned int tmpScore = competitorScores[j];
+                                                    const bool tmpComputorStatus = false;
+                                                    while (j
+                                                        && competitorScores[j - 1] < competitorScores[j])
+                                                    {
+                                                        competitorPublicKeys[j] = competitorPublicKeys[j - 1];
+                                                        competitorScores[j] = competitorScores[j - 1];
+                                                        competitorPublicKeys[--j] = tmpPublicKey;
+                                                        competitorScores[j] = tmpScore;
+                                                    }
+                                                }
+
+                                                minimumComputorScore = competitorScores[NUMBER_OF_COMPUTORS - QUORUM - 1];
+
+                                                unsigned char candidateCounter = 0;
+                                                for (unsigned int i = 0; i < (NUMBER_OF_COMPUTORS - QUORUM) * 2; i++)
+                                                {
+                                                    if (!competitorComputorStatuses[i])
+                                                    {
+                                                        minimumCandidateScore = competitorScores[i];
+                                                        candidateCounter++;
+                                                    }
+                                                }
+                                                if (candidateCounter < NUMBER_OF_COMPUTORS - QUORUM)
+                                                {
+                                                    minimumCandidateScore = minimumComputorScore;
+                                                }
+
+                                                for (unsigned int i = 0; i < QUORUM; i++)
+                                                {
+                                                    system.futureComputors[i] = *((__m256i*)minerPublicKeys[i]);
+                                                }
+                                                for (unsigned int i = QUORUM; i < NUMBER_OF_COMPUTORS; i++)
+                                                {
+                                                    system.futureComputors[i] = competitorPublicKeys[i - QUORUM];
+                                                }
                                             }
                                         }
                                     }
@@ -7824,6 +7942,20 @@ static void processTick(unsigned long long processorNumber)
 
 static void endEpoch()
 {
+    for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
+    {
+        if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+            && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+        {
+            __computation = contractSystemFunctions[executedContractIndex][END_EPOCH];
+
+            while (__computation)
+            {
+                _mm_pause();
+            }
+        }
+    }
+
     Contract0State* contract0State = (Contract0State*)contractStates[0];
     for (unsigned int contractIndex = 0; contractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); contractIndex++)
     {
@@ -7933,8 +8065,8 @@ static void endEpoch()
     {
         ACQUIRE(spectrumLock);
 
-        Entity* reorgSpectrum = (Entity*)reorgBuffer;
-        bs->SetMem(reorgSpectrum, SPECTRUM_CAPACITY * sizeof(Entity), 0);
+        ::Entity* reorgSpectrum = (::Entity*)reorgBuffer;
+        bs->SetMem(reorgSpectrum, SPECTRUM_CAPACITY * sizeof(::Entity), 0);
         for (unsigned int i = 0; i < SPECTRUM_CAPACITY; i++)
         {
             if (spectrum[i].incomingAmount - spectrum[i].outgoingAmount)
@@ -7944,7 +8076,7 @@ static void endEpoch()
             iteration:
                 if (EQUAL(*((__m256i*)reorgSpectrum[index].publicKey), ZERO))
                 {
-                    bs->CopyMem(&reorgSpectrum[index], &spectrum[i], sizeof(Entity));
+                    bs->CopyMem(&reorgSpectrum[index], &spectrum[i], sizeof(::Entity));
                 }
                 else
                 {
@@ -7954,7 +8086,7 @@ static void endEpoch()
                 }
             }
         }
-        bs->CopyMem(spectrum, reorgSpectrum, SPECTRUM_CAPACITY * sizeof(Entity));
+        bs->CopyMem(spectrum, reorgSpectrum, SPECTRUM_CAPACITY * sizeof(::Entity));
 
         unsigned int digestIndex;
         for (digestIndex = 0; digestIndex < SPECTRUM_CAPACITY; digestIndex++)
@@ -8873,10 +9005,10 @@ static void saveSpectrum()
     const unsigned long long beginningTick = __rdtsc();
 
     ACQUIRE(spectrumLock);
-    long long savedSize = save(SPECTRUM_FILE_NAME, SPECTRUM_CAPACITY * sizeof(Entity), (unsigned char*)spectrum);
+    long long savedSize = save(SPECTRUM_FILE_NAME, SPECTRUM_CAPACITY * sizeof(::Entity), (unsigned char*)spectrum);
     RELEASE(spectrumLock);
 
-    if (savedSize == SPECTRUM_CAPACITY * sizeof(Entity))
+    if (savedSize == SPECTRUM_CAPACITY * sizeof(::Entity))
     {
         setNumber(message, savedSize, TRUE);
         appendText(message, L" bytes of the spectrum data are saved (");
@@ -9214,14 +9346,14 @@ static bool initialize()
             ((Transaction*)&entityPendingTransactions[i * MAX_TRANSACTION_SIZE])->tick = 0;
         }
 
-        if (status = bs->AllocatePool(EfiRuntimeServicesData, SPECTRUM_CAPACITY * sizeof(Entity) >= ASSETS_CAPACITY * sizeof(Asset) ? SPECTRUM_CAPACITY * sizeof(Entity) : ASSETS_CAPACITY * sizeof(Asset), (void**)&reorgBuffer))
+        if (status = bs->AllocatePool(EfiRuntimeServicesData, SPECTRUM_CAPACITY * sizeof(::Entity) >= ASSETS_CAPACITY * sizeof(Asset) ? SPECTRUM_CAPACITY * sizeof(::Entity) : ASSETS_CAPACITY * sizeof(Asset), (void**)&reorgBuffer))
         {
             logStatus(L"EFI_BOOT_SERVICES.AllocatePool() fails", status, __LINE__);
 
             return false;
         }
 
-        if ((status = bs->AllocatePool(EfiRuntimeServicesData, SPECTRUM_CAPACITY * sizeof(Entity), (void**)&spectrum))
+        if ((status = bs->AllocatePool(EfiRuntimeServicesData, SPECTRUM_CAPACITY * sizeof(::Entity), (void**)&spectrum))
             || (status = bs->AllocatePool(EfiRuntimeServicesData, (SPECTRUM_CAPACITY * 2 - 1) * 32ULL, (void**)&spectrumDigests)))
         {
             logStatus(L"EFI_BOOT_SERVICES.AllocatePool() fails", status, __LINE__);
@@ -9291,8 +9423,8 @@ static bool initialize()
         SPECTRUM_FILE_NAME[sizeof(SPECTRUM_FILE_NAME) / sizeof(SPECTRUM_FILE_NAME[0]) - 4] = system.epoch / 100 + L'0';
         SPECTRUM_FILE_NAME[sizeof(SPECTRUM_FILE_NAME) / sizeof(SPECTRUM_FILE_NAME[0]) - 3] = (system.epoch % 100) / 10 + L'0';
         SPECTRUM_FILE_NAME[sizeof(SPECTRUM_FILE_NAME) / sizeof(SPECTRUM_FILE_NAME[0]) - 2] = system.epoch % 10 + L'0';
-        long long loadedSize = load(SPECTRUM_FILE_NAME, SPECTRUM_CAPACITY * sizeof(Entity), (unsigned char*)spectrum);
-        if (loadedSize != SPECTRUM_CAPACITY * sizeof(Entity))
+        long long loadedSize = load(SPECTRUM_FILE_NAME, SPECTRUM_CAPACITY * sizeof(::Entity), (unsigned char*)spectrum);
+        if (loadedSize != SPECTRUM_CAPACITY * sizeof(::Entity))
         {
             logStatus(L"EFI_FILE_PROTOCOL.Read() reads invalid number of bytes", loadedSize, __LINE__);
 
@@ -9319,7 +9451,7 @@ static bool initialize()
                 numberOfLeafs >>= 1;
             }
 
-            setNumber(message, SPECTRUM_CAPACITY * sizeof(Entity), TRUE);
+            setNumber(message, SPECTRUM_CAPACITY * sizeof(::Entity), TRUE);
             appendText(message, L" bytes of the spectrum data are hashed (");
             appendNumber(message, (__rdtsc() - beginningTick) * 1000000 / frequency, TRUE);
             appendText(message, L" microseconds).");
@@ -9410,14 +9542,14 @@ static bool initialize()
 
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
-        randomSeed[0] = 99;
-        randomSeed[1] = 23;
-        randomSeed[2] = 147;
-        randomSeed[3] = 2;
-        randomSeed[4] = 202;
-        randomSeed[5] = 0;
-        randomSeed[6] = 0;
-        randomSeed[7] = 0;
+        randomSeed[0] = 28;
+        randomSeed[1] = 88;
+        randomSeed[2] = 137;
+        randomSeed[3] = 55;
+        randomSeed[4] = 101;
+        randomSeed[5] = 7;
+        randomSeed[6] = 165;
+        randomSeed[7] = 5;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
@@ -9928,103 +10060,6 @@ static void processKeyPresses()
 
         case 0x0D:
         {
-            __m256i contenderPublicKeys[(NUMBER_OF_COMPUTORS - QUORUM) * 2];
-            unsigned int contenderScores[(NUMBER_OF_COMPUTORS - QUORUM) * 2];
-
-            for (unsigned int i = 0; i < NUMBER_OF_COMPUTORS - QUORUM; i++)
-            {
-                contenderPublicKeys[i] = *((__m256i*)minerPublicKeys[QUORUM + i]);
-                contenderScores[i] = minerScores[QUORUM + i];
-
-                if (NUMBER_OF_COMPUTORS + i < numberOfMiners)
-                {
-                    contenderPublicKeys[i + (NUMBER_OF_COMPUTORS - QUORUM)] = *((__m256i*)minerPublicKeys[NUMBER_OF_COMPUTORS + i]);
-                    contenderScores[i + (NUMBER_OF_COMPUTORS - QUORUM)] = minerScores[NUMBER_OF_COMPUTORS + i];
-                }
-                else
-                {
-                    contenderScores[i + (NUMBER_OF_COMPUTORS - QUORUM)] = 0;
-                }
-            }
-            for (unsigned int i = NUMBER_OF_COMPUTORS - QUORUM; i < (NUMBER_OF_COMPUTORS - QUORUM) * 2; i++)
-            {
-                int j = i;
-                while (j
-                    && contenderScores[j - 1] < contenderScores[j])
-                {
-                    const __m256i tmpPublicKey = contenderPublicKeys[j];
-                    const unsigned int tmpScore = contenderScores[j];
-                    contenderPublicKeys[j] = contenderPublicKeys[j - 1];
-                    contenderScores[j] = contenderScores[j - 1];
-                    contenderPublicKeys[--j] = tmpPublicKey;
-                    contenderScores[j] = tmpScore;
-                }
-            }
-
-            for (unsigned int i = 0; i < QUORUM; i++)
-            {
-                system.futureComputors[i] = *((__m256i*)minerPublicKeys[i]);
-            }
-            for (unsigned int i = QUORUM; i < NUMBER_OF_COMPUTORS; i++)
-            {
-                system.futureComputors[i] = contenderPublicKeys[i - QUORUM];
-            }
-            saveSystem();
-
-            for (unsigned int i = 0; i < sizeof(computorSeeds) / sizeof(computorSeeds[0]); i++)
-            {
-                unsigned int j;
-                for (j = 0; j < QUORUM; j++)
-                {
-                    if (EQUAL(*((__m256i*)minerPublicKeys[j]), *((__m256i*)computorPublicKeys[i])))
-                    {
-                        getIdentity(computorPublicKeys[i], message, false);
-                        appendText(message, L" (#");
-                        appendNumber(message, j, TRUE);
-                        appendText(message, L"/");
-                        appendNumber(message, minerScores[j], TRUE);
-                        appendText(message, L" solutions) = ");
-                        long long amount = 0;
-                        const int spectrumIndex = ::spectrumIndex(computorPublicKeys[i]);
-                        if (spectrumIndex >= 0)
-                        {
-                            amount = energy(spectrumIndex);
-                        }
-                        appendNumber(message, amount, TRUE);
-                        appendText(message, L" qus");
-                        log(message);
-
-                        break;
-                    }
-                }
-                if (j == QUORUM)
-                {
-                    for (j = 0; j < (NUMBER_OF_COMPUTORS - QUORUM) * 2; j++)
-                    {
-                        if (EQUAL(contenderPublicKeys[j], *((__m256i*)computorPublicKeys[i])))
-                        {
-                            getIdentity(computorPublicKeys[i], message, false);
-                            appendText(message, L" (#");
-                            appendNumber(message, j + QUORUM, TRUE);
-                            appendText(message, L"/");
-                            appendNumber(message, contenderScores[j], TRUE);
-                            appendText(message, L" solutions) = ");
-                            long long amount = 0;
-                            const int spectrumIndex = ::spectrumIndex(computorPublicKeys[i]);
-                            if (spectrumIndex >= 0)
-                            {
-                                amount = energy(spectrumIndex);
-                            }
-                            appendNumber(message, amount, TRUE);
-                            appendText(message, L" qus");
-                            log(message);
-
-                            break;
-                        }
-                    }
-                }
-            }
-
             unsigned int numberOfSolutions = 0;
             for (unsigned int i = 0; i < numberOfMiners; i++)
             {
@@ -10033,8 +10068,10 @@ static void processKeyPresses()
             setNumber(message, numberOfMiners, TRUE);
             appendText(message, L" miners with ");
             appendNumber(message, numberOfSolutions, TRUE);
-            appendText(message, L" solutions (min score = ");
-            appendNumber(message, contenderScores[NUMBER_OF_COMPUTORS - QUORUM - 1], TRUE);
+            appendText(message, L" solutions (min computor score = ");
+            appendNumber(message, minimumComputorScore, TRUE);
+            appendText(message, L", min candidate score = ");
+            appendNumber(message, minimumCandidateScore, TRUE);
             appendText(message, L").");
             log(message);
         }
