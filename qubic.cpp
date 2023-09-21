@@ -10,8 +10,8 @@ struct Entity
     unsigned int latestIncomingTransferTick, latestOutgoingTransferTick;
 };
 
-static void __beginFunction(const unsigned int);
-static void __endFunction(const unsigned int);
+static void __beginFunctionOrProcedure(const unsigned int);
+static void __endFunctionOrProcedure(const unsigned int);
 static __m256i __arbitrator();
 static __m256i __computor(unsigned short);
 static unsigned char __day();
@@ -35,13 +35,14 @@ static unsigned char __year();
 #define QX_CONTRACT_INDEX 1
 #define CONTRACT_INDEX QX_CONTRACT_INDEX
 #define CONTRACT_STATE_TYPE QX
+#define CONTRACT_STATE2_TYPE QX2
 #include "qubics/Qx.h"
 static CONTRACT_STATE_TYPE* _QX;
 
 #define QUOTTERY_CONTRACT_INDEX 2
 
 #define CONTRACT_ITERATION_BATCH_SIZE 100
-#define MAX_CONTRACT_ITERATION_DURATION 5000 // In milliseconds, must be above 0
+#define MAX_CONTRACT_ITERATION_DURATION 1000 // In milliseconds, must be above 0
 #define MAX_NUMBER_OF_CONTRACTS 1024 // Must be 1024
 
 struct Contract0State
@@ -66,7 +67,8 @@ constexpr struct ContractDescription
     {"QTRY", 72, 10000, sizeof(IPO)}
 };
 
-static void (*contractSystemFunctions[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])][5])(void*);
+static void (*contractSystemProcedures[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])][5])(void*);
+static void (*contractExpandProcedures[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])])(void*, void*);
 static void (*contractUserFunctions[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])][65536])(void*, void*, void*);
 
 #pragma warning(push)
@@ -78,13 +80,16 @@ static void (*contractUserFunctions[sizeof(contractDescriptions) / sizeof(contra
 #define END_TICK 4
 #pragma warning(pop)
 
-#define REGISTER(contractName)\
+#define REGISTER_CONTRACT_FUNCTIONS_AND_PROCEDURES(contractName)\
 _##contractName = (contractName*)contractState;\
-contractSystemFunctions[contractIndex][INITIALIZE] = (void (*)(void*))contractName::__initialize;\
-contractSystemFunctions[contractIndex][BEGIN_EPOCH] = (void (*)(void*))contractName::__beginEpoch;\
-contractSystemFunctions[contractIndex][END_EPOCH] = (void (*)(void*))contractName::__endEpoch;\
-contractSystemFunctions[contractIndex][BEGIN_TICK] = (void (*)(void*))contractName::__beginTick;\
-contractSystemFunctions[contractIndex][END_TICK] = (void (*)(void*))contractName::__endTick;
+contractSystemProcedures[contractIndex][INITIALIZE] = (void (*)(void*))contractName::__initialize;\
+contractSystemProcedures[contractIndex][BEGIN_EPOCH] = (void (*)(void*))contractName::__beginEpoch;\
+contractSystemProcedures[contractIndex][END_EPOCH] = (void (*)(void*))contractName::__endEpoch;\
+contractSystemProcedures[contractIndex][BEGIN_TICK] = (void (*)(void*))contractName::__beginTick;\
+contractSystemProcedures[contractIndex][END_TICK] = (void (*)(void*))contractName::__endTick;\
+contractExpandProcedures[contractIndex] = (void (*)(void*, void*))contractName::__expand;\
+_##contractName->__registerUserFunctions();\
+_##contractName->__registerUserProcedures();
 
 static void initializeContract(const unsigned int contractIndex, void* contractState)
 {
@@ -92,7 +97,7 @@ static void initializeContract(const unsigned int contractIndex, void* contractS
     {
     case QX_CONTRACT_INDEX:
     {
-        REGISTER(QX);
+        REGISTER_CONTRACT_FUNCTIONS_AND_PROCEDURES(QX);
     }
     break;
     }
@@ -120,11 +125,11 @@ static const unsigned char knownPublicPeers[][4] = {
 #define AVX512 0
 
 #define VERSION_A 1
-#define VERSION_B 168
+#define VERSION_B 170
 #define VERSION_C 0
 
-#define EPOCH 73
-#define TICK 0
+#define EPOCH 75
+#define TICK 9100000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
@@ -137,8 +142,8 @@ static unsigned short CONTRACT_FILE_NAME[] = L"contract????.???";
 #define INFO_LENGTH 1000
 #define NUMBER_OF_INPUT_NEURONS 1000
 #define NUMBER_OF_OUTPUT_NEURONS 1000
-#define MAX_INPUT_DURATION 30
-#define MAX_OUTPUT_DURATION 30
+#define MAX_INPUT_DURATION 400
+#define MAX_OUTPUT_DURATION 400
 #define SOLUTION_THRESHOLD 1120
 
 
@@ -4899,7 +4904,7 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 
 #define ASSETS_CAPACITY 0x1000000ULL // Must be 2^N
 #define ASSETS_DEPTH 24 // Is derived from ASSETS_CAPACITY (=N)
-#define BUFFER_SIZE 4194304
+#define BUFFER_SIZE 33554432
 #define CONTRACT_STATES_DEPTH 10 // Is derived from MAX_NUMBER_OF_CONTRACTS (=N)
 #define TARGET_TICK_DURATION 2000
 #define TICK_REQUESTING_PERIOD 500
@@ -4924,7 +4929,7 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define MESSAGE_TYPE_SOLUTION 0
 #define NUMBER_OF_EXCHANGED_PEERS 4
 #define NUMBER_OF_OUTGOING_CONNECTIONS 4
-#define NUMBER_OF_INCOMING_CONNECTIONS 60
+#define NUMBER_OF_INCOMING_CONNECTIONS 28
 #define NUMBER_OF_TRANSACTIONS_PER_TICK 128 // Must be 2^N
 #define PEER_REFRESHING_PERIOD 120000
 #define PORT 21841
@@ -5031,7 +5036,7 @@ struct RequestResponseHeader
 {
 private:
     unsigned char _size[3];
-    unsigned char _protocol;
+    unsigned char _protocol = 0;
     unsigned char _dejavu[3];
     unsigned char _type;
 
@@ -5046,16 +5051,6 @@ public:
         _size[0] = (unsigned char)size;
         _size[1] = (unsigned char)(size >> 8);
         _size[2] = (unsigned char)(size >> 16);
-    }
-
-    inline unsigned char protocol()
-    {
-        return _protocol;
-    }
-
-    inline void setProtocol()
-    {
-        _protocol = (unsigned char)VERSION_B;
     }
 
     inline bool isDejavuZero()
@@ -5316,6 +5311,22 @@ typedef struct
     unsigned char publicKeys[NUMBER_OF_COMPUTORS][32];
     long long prices[NUMBER_OF_COMPUTORS];
 } RespondContractIPO;
+
+#define REQUEST_ISSUED_ASSETS 35
+
+typedef struct
+{
+    unsigned char publicKey[32];
+    int minUniverseIndex;
+    bool anyPublicKey;
+} RequestIssuedAssets;
+
+#define RESPOND_ISSUED_ASSETS 36
+
+typedef struct
+{
+    // TODO
+} RespondIssuedAssets;
 
 struct ComputorProposal
 {
@@ -6285,7 +6296,6 @@ static void enqueueResponse(Peer* peer, const bool randomizeDejavu, const unsign
         responseQueueElements[responseQueueElementHead].offset = responseQueueBufferHead;
         RequestResponseHeader* responseHeader = (RequestResponseHeader*)&responseQueueBuffer[responseQueueBufferHead];
         responseHeader->setSize(sizeof(RequestResponseHeader) + dataSize);
-        responseHeader->setProtocol();
         if (randomizeDejavu)
         {
             responseHeader->randomizeDejavu();
@@ -6526,7 +6536,6 @@ static void requestEntity(Peer* peer, Processor* processor, RequestResponseHeade
     } packet;
 
     packet.header.setSize(sizeof(packet));
-    packet.header.setProtocol();
     packet.header.randomizeDejavu();
     packet.header.setType(RESPOND_ENTITY);
 
@@ -6571,7 +6580,6 @@ static void requestContractIPO(Peer* peer, Processor* processor, RequestResponse
     } packet;
 
     packet.header.setSize(sizeof(packet));
-    packet.header.setProtocol();
     packet.header.randomizeDejavu();
     packet.header.setType(RESPOND_CONTRACT_IPO);
 
@@ -7067,7 +7075,6 @@ static void requestProcessor(void* ProcedureArgument)
                     } packet;
 
                     packet.header.setSize(sizeof(packet));
-                    packet.header.setProtocol();
                     packet.header.randomizeDejavu();
                     packet.header.setType(RESPOND_CURRENT_TICK_INFO);
 
@@ -7240,23 +7247,23 @@ static EFI_HANDLE getTcp4Protocol(const unsigned char* remoteAddress, const unsi
     }
 }
 
-static void __beginFunction(const unsigned int functionId)
+static void __beginFunctionOrProcedure(const unsigned int functionOrProcedureId)
 {
-    if (functionFlags[functionId >> 6] & (1ULL << (functionId & 63)))
+    if (functionFlags[functionOrProcedureId >> 6] & (1ULL << (functionOrProcedureId & 63)))
     {
         // TODO
     }
     else
     {
-        functionFlags[functionId >> 6] |= (1ULL << (functionId & 63));
+        functionFlags[functionOrProcedureId >> 6] |= (1ULL << (functionOrProcedureId & 63));
     }
 }
 
-static void __endFunction(const unsigned int functionId)
+static void __endFunctionOrProcedure(const unsigned int functionOrProcedureId)
 {
-    functionFlags[functionId >> 6] &= ~(1ULL << (functionId & 63));
+    functionFlags[functionOrProcedureId >> 6] &= ~(1ULL << (functionOrProcedureId & 63));
 
-    contractStateChangeFlags[functionId >> (22 + 6)] |= (1ULL << ((functionId >> 22) & 63));
+    contractStateChangeFlags[functionOrProcedureId >> (22 + 6)] |= (1ULL << ((functionOrProcedureId >> 22) & 63));
 }
 
 static __m256i __arbitrator()
@@ -7372,7 +7379,7 @@ static long long __transfer(__m256i destination, long long amount)
 {
     if (((unsigned long long)amount) > MAX_AMOUNT)
     {
-        return -(MAX_AMOUNT + 1);
+        return -((long long)(MAX_AMOUNT + 1));
     }
 
     const int index = spectrumIndex((unsigned char*)&currentContract);
@@ -7420,7 +7427,7 @@ static void processTick(unsigned long long processorNumber)
             if (system.epoch == contractDescriptions[executedContractIndex].constructionEpoch
                 && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
             {
-                __computation = contractSystemFunctions[executedContractIndex][INITIALIZE];
+                __computation = contractSystemProcedures[executedContractIndex][INITIALIZE];
                 
                 while (__computation)
                 {
@@ -7434,7 +7441,7 @@ static void processTick(unsigned long long processorNumber)
             if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
                 && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
             {
-                __computation = contractSystemFunctions[executedContractIndex][BEGIN_EPOCH];
+                __computation = contractSystemProcedures[executedContractIndex][BEGIN_EPOCH];
 
                 while (__computation)
                 {
@@ -7449,7 +7456,7 @@ static void processTick(unsigned long long processorNumber)
         if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
             && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
         {
-            __computation = contractSystemFunctions[executedContractIndex][BEGIN_TICK];
+            __computation = contractSystemProcedures[executedContractIndex][BEGIN_TICK];
 
             while (__computation)
             {
@@ -7727,6 +7734,39 @@ static void processTick(unsigned long long processorNumber)
                                                 }
                                             }
                                         }
+                                        else
+                                        {
+                                            for (unsigned int i = 0; i < sizeof(computorSeeds) / sizeof(computorSeeds[0]); i++)
+                                            {
+                                                if (EQUAL(*((__m256i*)transaction->sourcePublicKey), *((__m256i*)computorPublicKeys[i])))
+                                                {
+                                                    ACQUIRE(solutionsLock);
+
+                                                    unsigned int j;
+                                                    for (j = 0; j < system.numberOfSolutions; j++)
+                                                    {
+                                                        if (EQUAL(*((__m256i*)(((unsigned char*)transaction) + sizeof(Transaction))), *((__m256i*)system.solutions[j].nonce))
+                                                            && EQUAL(*((__m256i*)transaction->sourcePublicKey), *((__m256i*)system.solutions[j].computorPublicKey)))
+                                                        {
+                                                            solutionPublicationTicks[j] = -1;
+
+                                                            break;
+                                                        }
+                                                    }
+                                                    if (j == system.numberOfSolutions
+                                                        && system.numberOfSolutions < MAX_NUMBER_OF_SOLUTIONS)
+                                                    {
+                                                        *((__m256i*)system.solutions[system.numberOfSolutions].computorPublicKey) = *((__m256i*)transaction->sourcePublicKey);
+                                                        *((__m256i*)system.solutions[system.numberOfSolutions].nonce) = *((__m256i*)(((unsigned char*)transaction) + sizeof(Transaction)));
+                                                        solutionPublicationTicks[system.numberOfSolutions++] = -1;
+                                                    }
+
+                                                    RELEASE(solutionsLock);
+
+                                                    break;
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -7749,7 +7789,7 @@ static void processTick(unsigned long long processorNumber)
         if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
             && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
         {
-            __computation = contractSystemFunctions[executedContractIndex][END_TICK];
+            __computation = contractSystemProcedures[executedContractIndex][END_TICK];
 
             while (__computation)
             {
@@ -7947,7 +7987,7 @@ static void endEpoch()
         if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
             && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
         {
-            __computation = contractSystemFunctions[executedContractIndex][END_EPOCH];
+            __computation = contractSystemProcedures[executedContractIndex][END_EPOCH];
 
             while (__computation)
             {
@@ -9138,7 +9178,7 @@ static bool initialize()
     {
         contractStates[contractIndex] = NULL;
     }
-    bs->SetMem(contractSystemFunctions, sizeof(contractSystemFunctions), 0);
+    bs->SetMem(contractSystemProcedures, sizeof(contractSystemProcedures), 0);
     bs->SetMem(contractUserFunctions, sizeof(contractUserFunctions), 0);
 
     getPublicKeyFromIdentity((const unsigned char*)OPERATOR, operatorPublicKey);
@@ -9192,7 +9232,6 @@ static bool initialize()
     bs->SetMem(publicPeers, sizeof(publicPeers), 0);
 
     broadcastedComputors.header.setSize(sizeof(broadcastedComputors.header) + sizeof(broadcastedComputors.broadcastComputors));
-    broadcastedComputors.header.setProtocol();
     broadcastedComputors.header.setType(BROADCAST_COMPUTORS);
     broadcastedComputors.broadcastComputors.computors.epoch = 0;
     for (unsigned int i = 0; i < NUMBER_OF_COMPUTORS; i++)
@@ -9205,16 +9244,12 @@ static bool initialize()
     bs->SetMem(&broadcastedComputors.broadcastComputors.computors.signature, sizeof(broadcastedComputors.broadcastComputors.computors.signature), 0);
 
     requestedComputors.header.setSize(sizeof(requestedComputors));
-    requestedComputors.header.setProtocol();
     requestedComputors.header.setType(REQUEST_COMPUTORS);
     requestedQuorumTick.header.setSize(sizeof(requestedQuorumTick));
-    requestedQuorumTick.header.setProtocol();
     requestedQuorumTick.header.setType(REQUEST_QUORUM_TICK);
     requestedTickData.header.setSize(sizeof(requestedTickData));
-    requestedTickData.header.setProtocol();
     requestedTickData.header.setType(REQUEST_TICK_DATA);
     requestedTickTransactions.header.setSize(sizeof(requestedTickTransactions));
-    requestedTickTransactions.header.setProtocol();
     requestedTickTransactions.header.setType(REQUEST_TICK_TRANSACTIONS);
     requestedTickTransactions.requestedTickTransactions.tick = 0;
 
@@ -9542,14 +9577,14 @@ static bool initialize()
 
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
-        randomSeed[0] = 28;
-        randomSeed[1] = 88;
-        randomSeed[2] = 137;
-        randomSeed[3] = 55;
-        randomSeed[4] = 101;
-        randomSeed[5] = 7;
-        randomSeed[6] = 165;
-        randomSeed[7] = 5;
+        randomSeed[0] = 7;
+        randomSeed[1] = 45;
+        randomSeed[2] = 1;
+        randomSeed[3] = 169;
+        randomSeed[4] = 37;
+        randomSeed[5] = 225;
+        randomSeed[6] = 114;
+        randomSeed[7] = 12;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
@@ -10366,7 +10401,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
 
                                     RequestResponseHeader* requestHeader = (RequestResponseHeader*)peers[i].dataToTransmit;
                                     requestHeader->setSize(sizeof(RequestResponseHeader) + sizeof(ExchangePublicPeers));
-                                    requestHeader->setProtocol();
                                     requestHeader->randomizeDejavu();
                                     requestHeader->setType(EXCHANGE_PUBLIC_PEERS);
                                     peers[i].dataToTransmitSize = requestHeader->size();
@@ -10416,8 +10450,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                                             if (receivedDataSize >= sizeof(RequestResponseHeader))
                                             {
                                                 RequestResponseHeader* requestResponseHeader = (RequestResponseHeader*)peers[i].receiveBuffer;
-                                                if (requestResponseHeader->size() < sizeof(RequestResponseHeader)
-                                                    || (requestResponseHeader->protocol() && (requestResponseHeader->protocol() < VERSION_B || requestResponseHeader->protocol() > VERSION_B + 1)))
+                                                if (requestResponseHeader->size() < sizeof(RequestResponseHeader))
                                                 {
                                                     setText(message, L"Forgetting ");
                                                     appendNumber(message, peers[i].address[0], FALSE);

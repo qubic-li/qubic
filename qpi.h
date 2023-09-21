@@ -17,6 +17,7 @@ namespace QPI
 	[
 	]
 	__
+	union
 
 	*/
 
@@ -552,7 +553,7 @@ namespace QPI
 
 	#define EQUAL(a, b) (_mm256_movemask_epi8(_mm256_cmpeq_epi64(a, b)) == 0xFFFFFFFF)
 	#define NULL_ID _mm256_setzero_si256()
-	#define NULL_INDEX (uint32)(-1)
+	#define NULL_INDEX (uint64)(-1)
 
 	#define _A 0
 	#define _B 1
@@ -4861,13 +4862,13 @@ namespace QPI
 	{
 	private:
 		id _values[2];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -4881,21 +4882,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -4906,29 +4907,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -4936,13 +4937,13 @@ namespace QPI
 	{
 	private:
 		id _values[4];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -4956,21 +4957,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -4981,29 +4982,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5011,13 +5012,13 @@ namespace QPI
 	{
 	private:
 		id _values[8];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5031,21 +5032,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5056,29 +5057,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5086,13 +5087,13 @@ namespace QPI
 	{
 	private:
 		id _values[16];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5106,21 +5107,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5131,29 +5132,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5161,13 +5162,13 @@ namespace QPI
 	{
 	private:
 		id _values[32];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5181,21 +5182,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5206,29 +5207,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5236,13 +5237,13 @@ namespace QPI
 	{
 	private:
 		id _values[64];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5256,21 +5257,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5281,29 +5282,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5311,13 +5312,13 @@ namespace QPI
 	{
 	private:
 		id _values[128];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5331,21 +5332,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5356,29 +5357,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5386,13 +5387,13 @@ namespace QPI
 	{
 	private:
 		id _values[256];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5406,21 +5407,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5431,29 +5432,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5461,13 +5462,13 @@ namespace QPI
 	{
 	private:
 		id _values[512];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5481,21 +5482,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5506,29 +5507,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5536,13 +5537,13 @@ namespace QPI
 	{
 	private:
 		id _values[1024];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5556,21 +5557,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5581,29 +5582,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5611,13 +5612,13 @@ namespace QPI
 	{
 	private:
 		id _values[2048];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5631,21 +5632,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5656,29 +5657,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5686,13 +5687,13 @@ namespace QPI
 	{
 	private:
 		id _values[4096];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5706,21 +5707,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5731,29 +5732,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5761,13 +5762,13 @@ namespace QPI
 	{
 	private:
 		id _values[8192];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5781,21 +5782,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5806,29 +5807,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5836,13 +5837,13 @@ namespace QPI
 	{
 	private:
 		id _values[16384];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5856,21 +5857,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5881,29 +5882,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5911,13 +5912,13 @@ namespace QPI
 	{
 	private:
 		id _values[32768];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5931,21 +5932,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -5956,29 +5957,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -5986,13 +5987,13 @@ namespace QPI
 	{
 	private:
 		id _values[65536];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6006,21 +6007,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6031,29 +6032,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6061,13 +6062,13 @@ namespace QPI
 	{
 	private:
 		id _values[131072];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6081,21 +6082,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6106,29 +6107,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6136,13 +6137,13 @@ namespace QPI
 	{
 	private:
 		id _values[262144];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6156,21 +6157,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6181,29 +6182,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6211,13 +6212,13 @@ namespace QPI
 	{
 	private:
 		id _values[524288];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6231,21 +6232,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6256,29 +6257,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6286,13 +6287,13 @@ namespace QPI
 	{
 	private:
 		id _values[1048576];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6306,21 +6307,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6331,29 +6332,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6361,13 +6362,13 @@ namespace QPI
 	{
 	private:
 		id _values[2097152];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6381,21 +6382,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6406,29 +6407,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6436,13 +6437,13 @@ namespace QPI
 	{
 	private:
 		id _values[4194304];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6456,21 +6457,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6481,29 +6482,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6511,13 +6512,13 @@ namespace QPI
 	{
 	private:
 		id _values[8388608];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6531,21 +6532,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6556,29 +6557,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6586,13 +6587,13 @@ namespace QPI
 	{
 	private:
 		id _values[16777216];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6606,21 +6607,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6631,29 +6632,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6661,13 +6662,13 @@ namespace QPI
 	{
 	private:
 		id _values[33554432];
-		uint32 _population;
+		uint64 _population;
 
 	public:
-		uint32 add(id value)
+		uint64 add(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6681,21 +6682,21 @@ namespace QPI
 					return index;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 capacity()
+		inline uint64 capacity()
 		{
 			return sizeof(_values) / sizeof(_values[0]);
 		}
 
-		uint32 index(id value)
+		uint64 index(id value)
 		{
-			uint32 index = (*((uint32*)&value)) & (sizeof(_values) / sizeof(_values[0]) - 1);
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			uint64 index = (*((uint64*)&value)) & (capacity() - 1);
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				if (EQUAL(_values[index], value))
 				{
@@ -6706,29 +6707,29 @@ namespace QPI
 					return NULL_INDEX;
 				}
 
-				index = (index + 1) & (sizeof(_values) / sizeof(_values[0]) - 1);
+				index = (index + 1) & (capacity() - 1);
 			}
 
 			return NULL_INDEX;
 		}
 
-		inline uint32 population()
+		inline uint64 population()
 		{
 			return _population;
 		}
 
 		void reset()
 		{
-			for (uint32 i = 0; i < sizeof(_values) / sizeof(_values[0]); i++)
+			for (uint64 i = 0; i < capacity(); i++)
 			{
 				_values[i] = NULL_ID;
 			}
 			_population = 0;
 		}
 
-		inline id value(uint32 index)
+		inline id value(uint64 index)
 		{
-			return _values[index & (sizeof(_values) / sizeof(_values[0]) - 1)];
+			return _values[index & (capacity() - 1)];
 		}
 	};
 
@@ -6855,23 +6856,27 @@ namespace QPI
 
 	//////////
 
-	#define PRIVATE(function) private: static void function(CONTRACT_STATE_TYPE& s, function##_input& i, function##_output& o) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define INITIALIZE public: static void __initialize(CONTRACT_STATE_TYPE& state) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define PUBLIC(function) public: static void function(CONTRACT_STATE_TYPE& s, function##_input& i, function##_output& o) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define BEGIN_EPOCH public: static void __beginEpoch(CONTRACT_STATE_TYPE& state) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define REGISTER_FUNCTIONS_FOR_USERS public: static void __registerFunctionsForUsers() { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define END_EPOCH public: static void __endEpoch(CONTRACT_STATE_TYPE& state) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define INITIALIZE public: static void __initialize(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define BEGIN_TICK public: static void __beginTick(CONTRACT_STATE_TYPE& state) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define BEGIN_EPOCH public: static void __beginEpoch(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define END_TICK public: static void __endTick(CONTRACT_STATE_TYPE& state) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define END_EPOCH public: static void __endEpoch(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define EXPAND public: static void __expand(CONTRACT_STATE_TYPE& state, CONTRACT_STATE2_TYPE& state2) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define BEGIN_TICK public: static void __beginTick(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define PRIVATE(functionOrProcedure) private: static void functionOrProcedure(CONTRACT_STATE_TYPE& statetate, functionOrProcedure##_input& input, functionOrProcedure##_output& output) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define END_TICK public: static void __endTick(CONTRACT_STATE_TYPE& s) { constexpr unsigned int __functionId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunction(__functionId);
+	#define PUBLIC(functionOrProcedure) public: static void functionOrProcedure(CONTRACT_STATE_TYPE& state, functionOrProcedure##_input& input, functionOrProcedure##_output& output) { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
 
-	#define _ ::__endFunction(__functionId); }
+	#define REGISTER_USER_FUNCTIONS public: static void __registerUserFunctions() { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
+
+	#define REGISTER_USER_PROCEDURES public: static void __registerUserProcedures() { constexpr unsigned int __functionOrProcedureId = (CONTRACT_INDEX << 22) | __LINE__; ::__beginFunctionOrProcedure(__functionOrProcedureId);
+
+	#define _ ::__endFunctionOrProcedure(__functionOrProcedureId); }
 
 	#define SELF _mm256_set_epi64x(0, 0, 0, CONTRACT_INDEX)
 }
