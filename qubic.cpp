@@ -125,11 +125,11 @@ static const unsigned char knownPublicPeers[][4] = {
 #define AVX512 0
 
 #define VERSION_A 1
-#define VERSION_B 170
+#define VERSION_B 171
 #define VERSION_C 0
 
-#define EPOCH 75
-#define TICK 9100000
+#define EPOCH 76
+#define TICK 9210000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
@@ -142,8 +142,8 @@ static unsigned short CONTRACT_FILE_NAME[] = L"contract????.???";
 #define INFO_LENGTH 1000
 #define NUMBER_OF_INPUT_NEURONS 1000
 #define NUMBER_OF_OUTPUT_NEURONS 1000
-#define MAX_INPUT_DURATION 400
-#define MAX_OUTPUT_DURATION 400
+#define MAX_INPUT_DURATION 200
+#define MAX_OUTPUT_DURATION 200
 #define SOLUTION_THRESHOLD 1120
 
 
@@ -4906,17 +4906,17 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define ASSETS_DEPTH 24 // Is derived from ASSETS_CAPACITY (=N)
 #define BUFFER_SIZE 33554432
 #define CONTRACT_STATES_DEPTH 10 // Is derived from MAX_NUMBER_OF_CONTRACTS (=N)
-#define TARGET_TICK_DURATION 2000
+#define TARGET_TICK_DURATION 4000
 #define TICK_REQUESTING_PERIOD 500
 #define DEJAVU_SWAP_LIMIT 1000000
-#define DISSEMINATION_MULTIPLIER 8
+#define DISSEMINATION_MULTIPLIER 4
 #define FIRST_TICK_TRANSACTION_OFFSET sizeof(unsigned long long)
 #define ISSUANCE_RATE 1000000000000LL
 #define MAX_AMOUNT (ISSUANCE_RATE * 1000ULL)
 #define MAX_INPUT_SIZE (MAX_TRANSACTION_SIZE - (sizeof(Transaction) + SIGNATURE_SIZE))
 #define MAX_NUMBER_OF_MINERS 8192
 #define NUMBER_OF_MINER_SOLUTION_FLAGS 0x100000000
-#define MAX_NUMBER_OF_PROCESSORS 64
+#define MAX_NUMBER_OF_PROCESSORS 32
 #define MAX_NUMBER_OF_PUBLIC_PEERS 1024
 #define MAX_NUMBER_OF_SOLUTIONS 65536 // Must be 2^N
 #define MAX_TRANSACTION_SIZE 1024ULL
@@ -4930,7 +4930,7 @@ static bool verify(const unsigned char* publicKey, const unsigned char* messageD
 #define NUMBER_OF_EXCHANGED_PEERS 4
 #define NUMBER_OF_OUTGOING_CONNECTIONS 4
 #define NUMBER_OF_INCOMING_CONNECTIONS 28
-#define NUMBER_OF_TRANSACTIONS_PER_TICK 128 // Must be 2^N
+#define NUMBER_OF_TRANSACTIONS_PER_TICK 1024 // Must be 2^N
 #define PEER_REFRESHING_PERIOD 120000
 #define PORT 21841
 #define QUORUM (NUMBER_OF_COMPUTORS * 2 / 3 + 1)
@@ -5036,9 +5036,9 @@ struct RequestResponseHeader
 {
 private:
     unsigned char _size[3];
-    unsigned char _protocol = 0;
-    unsigned char _dejavu[3];
     unsigned char _type;
+    unsigned char _dejavu[3];
+    unsigned char _deprecatedType;
 
 public:
     inline unsigned int size()
@@ -5085,7 +5085,7 @@ public:
 
     inline void setType(const unsigned char type)
     {
-        _type = type;
+        _deprecatedType = _type = type;
     }
 };
 
@@ -5482,6 +5482,7 @@ static __m256i* assetDigests = NULL;
 static unsigned long long* assetChangeFlags = NULL;
 static char CONTRACT_ASSET_UNIT_OF_MEASUREMENT[7] = { 0, 0, 0, 0, 0, 0, 0 };
 
+static volatile int numberOfNonLaunchedSCs = 0, numberOfNonLaunchedSCs2 = 0, numberOfFailedSCs = 0, numberOfAllSCs = 0;
 static volatile char computerLock = 0;
 static volatile char computationProcessorState = 0;
 static volatile unsigned long long scLoopNumerator = 0, scLoopDenominator = 0;
@@ -8316,8 +8317,7 @@ static void tickProcessor(void*)
                     latestProcessedTick = system.tick;
                 }
 
-                if (!targetNextTickDataDigestIsKnown
-                    && futureTickTotalNumberOfComputors > NUMBER_OF_COMPUTORS - QUORUM)
+                if (futureTickTotalNumberOfComputors > NUMBER_OF_COMPUTORS - QUORUM)
                 {
                     const unsigned int baseOffset = (system.tick + 1 - system.initialTick) * NUMBER_OF_COMPUTORS;
                     unsigned int numberOfEmptyNextTickTransactionDigest = 0;
@@ -8917,6 +8917,8 @@ static void tickProcessor(void*)
 
 static void computationProcessor(void*)
 {
+    computationProcessorState = 2;
+
     enableAVX();
 
     const unsigned long long deadline = __rdtsc() + MAX_CONTRACT_ITERATION_DURATION * CONTRACT_ITERATION_BATCH_SIZE * frequency / 1000;
@@ -8948,7 +8950,7 @@ static void computationProcessor(void*)
         }
     }
 
-    computationProcessorState = 2;
+    computationProcessorState = 3;
 }
 
 static void shutdownCallback(EFI_EVENT Event, void* Context)
@@ -8964,10 +8966,15 @@ static void computationProcessorShutdownCallback(EFI_EVENT Event, void* Context)
 {
     bs->CloseEvent(Event);
 
-    if (computationProcessorState != 2)
+    if (computationProcessorState == 1)
     {
-        // TODO
+        numberOfNonLaunchedSCs2++;
     }
+    if (computationProcessorState == 2)
+    {
+        numberOfFailedSCs++;
+    }
+    numberOfAllSCs++;
     
     computationProcessorState = 0;
 }
@@ -9577,14 +9584,14 @@ static bool initialize()
 
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
-        randomSeed[0] = 7;
-        randomSeed[1] = 45;
-        randomSeed[2] = 1;
-        randomSeed[3] = 169;
-        randomSeed[4] = 37;
-        randomSeed[5] = 225;
-        randomSeed[6] = 114;
-        randomSeed[7] = 12;
+        randomSeed[0] = 1;
+        randomSeed[1] = 24;
+        randomSeed[2] = 11;
+        randomSeed[3] = 42;
+        randomSeed[4] = 169;
+        randomSeed[5] = 73;
+        randomSeed[6] = 83;
+        randomSeed[7] = 63;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
@@ -9942,7 +9949,15 @@ static void logInfo()
     unsigned int filledResponseQueueBufferSize = (responseQueueBufferHead >= responseQueueBufferTail) ? (responseQueueBufferHead - responseQueueBufferTail) : (RESPONSE_QUEUE_BUFFER_SIZE - (responseQueueBufferTail - responseQueueBufferHead));
     unsigned int filledRequestQueueLength = (requestQueueElementHead >= requestQueueElementTail) ? (requestQueueElementHead - requestQueueElementTail) : (REQUEST_QUEUE_LENGTH - (requestQueueElementTail - requestQueueElementHead));
     unsigned int filledResponseQueueLength = (responseQueueElementHead >= responseQueueElementTail) ? (responseQueueElementHead - responseQueueElementTail) : (RESPONSE_QUEUE_LENGTH - (responseQueueElementTail - responseQueueElementHead));
-    setNumber(message, filledRequestQueueBufferSize, TRUE);
+    setNumber(message, numberOfNonLaunchedSCs, TRUE);
+    appendText(message, L"/");
+    appendNumber(message, numberOfNonLaunchedSCs2, TRUE);
+    appendText(message, L"/");
+    appendNumber(message, numberOfFailedSCs, TRUE);
+    appendText(message, L"/");
+    appendNumber(message, numberOfAllSCs, TRUE);
+    appendText(message, L" SCs | ");
+    appendNumber(message, filledRequestQueueBufferSize, TRUE);
     appendText(message, L" (");
     appendNumber(message, filledRequestQueueLength, TRUE);
     appendText(message, L") :: ");
@@ -9958,7 +9973,7 @@ static void logInfo()
     {
         appendText(message, L"?");
     }
-    appendText(message, L" microseconds.");
+    appendText(message, L" mcs.");
     log(message);
 }
 
@@ -10307,8 +10322,8 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, computationProcessorShutdownCallback, NULL, &computationProcessorEvent);
                             if (status = mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * CONTRACT_ITERATION_BATCH_SIZE * 2 * 1000, NULL, NULL))
                             {
-                                bs->CloseEvent(computationProcessorEvent);
-                                computationProcessorState = 0;
+                                numberOfNonLaunchedSCs++;
+                                logStatus(L"EFI_MP_SERVICES_PROTOCOL.StartupThisAP() fails", status, __LINE__);
                             }
                         }
 
