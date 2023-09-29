@@ -41,7 +41,6 @@ static CONTRACT_STATE_TYPE* _QX;
 
 #define QUOTTERY_CONTRACT_INDEX 2
 
-#define CONTRACT_ITERATION_BATCH_SIZE 100
 #define MAX_CONTRACT_ITERATION_DURATION 1000 // In milliseconds, must be above 0
 #define MAX_NUMBER_OF_CONTRACTS 1024 // Must be 1024
 
@@ -126,7 +125,7 @@ static const unsigned char knownPublicPeers[][4] = {
 
 #define VERSION_A 1
 #define VERSION_B 171
-#define VERSION_C 0
+#define VERSION_C 2
 
 #define EPOCH 76
 #define TICK 9210000
@@ -5486,6 +5485,8 @@ static volatile int numberOfNonLaunchedSCs = 0, numberOfNonLaunchedSCs2 = 0, num
 static volatile char computerLock = 0;
 static volatile char computationProcessorState = 0;
 static volatile unsigned long long scLoopNumerator = 0, scLoopDenominator = 0;
+static volatile unsigned long long scLoopNumerator2 = 0, scLoopDenominator2 = 0;
+static volatile unsigned long long scLoopNumerator3 = 0, scLoopDenominator3 = 0;
 static EFI_EVENT computationProcessorEvent;
 static unsigned long long mainLoopNumerator = 0, mainLoopDenominator = 0;
 static volatile unsigned int executedContractIndex;
@@ -6081,8 +6082,11 @@ static void addPublicPeer(unsigned char address[4])
 
     ACQUIRE(publicPeersLock);
 
-    publicPeers[numberOfPublicPeers].isVerified = false;
-    *((int*)publicPeers[numberOfPublicPeers++].address) = *((int*)address);
+    if (numberOfPublicPeers < MAX_NUMBER_OF_PUBLIC_PEERS)
+    {
+        publicPeers[numberOfPublicPeers].isVerified = false;
+        *((int*)publicPeers[numberOfPublicPeers++].address) = *((int*)address);
+    }
 
     RELEASE(publicPeersLock);
 }
@@ -7457,12 +7461,17 @@ static void processTick(unsigned long long processorNumber)
         if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
             && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
         {
+            const unsigned long long scBeginningTime = __rdtsc();
+
             __computation = contractSystemProcedures[executedContractIndex][BEGIN_TICK];
 
             while (__computation)
             {
                 _mm_pause();
             }
+
+            scLoopNumerator += __rdtsc() - scBeginningTime;
+            scLoopDenominator++;
         }
     }
 
@@ -7790,12 +7799,17 @@ static void processTick(unsigned long long processorNumber)
         if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
             && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
         {
+            const unsigned long long scBeginningTime = __rdtsc();
+
             __computation = contractSystemProcedures[executedContractIndex][END_TICK];
 
             while (__computation)
             {
                 _mm_pause();
             }
+
+            scLoopNumerator2 += __rdtsc() - scBeginningTime;
+            scLoopDenominator2++;
         }
     }
 
@@ -8921,36 +8935,32 @@ static void computationProcessor(void*)
 
     enableAVX();
 
-    const unsigned long long deadline = __rdtsc() + MAX_CONTRACT_ITERATION_DURATION * CONTRACT_ITERATION_BATCH_SIZE * frequency / 1000;
-    while (__rdtsc() < deadline)
+    if (computation)
     {
-        if (computation)
+        // TODO
+    }
+    else
+    {
+        if (__computation)
         {
-            // TODO
+            const unsigned long long scBeginningTime = __rdtsc();
+
+            currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+            __computation(contractStates[executedContractIndex]);
+
+            __computation = NULL;
+
+            scLoopNumerator3 += __rdtsc() - scBeginningTime;
+            scLoopDenominator3++;
         }
         else
         {
-            if (__computation)
-            {
-                const unsigned long long scBeginningTime = __rdtsc();
-
-                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
-
-                __computation(contractStates[executedContractIndex]);
-
-                scLoopNumerator += __rdtsc() - scBeginningTime;
-                scLoopDenominator++;
-
-                __computation = NULL;
-            }
-            else
-            {
-                _mm_pause();
-            }
+            _mm_pause();
         }
     }
 
-    computationProcessorState = 3;
+    computationProcessorState = 0;
 }
 
 static void shutdownCallback(EFI_EVENT Event, void* Context)
@@ -8960,23 +8970,6 @@ static void shutdownCallback(EFI_EVENT Event, void* Context)
 
 static void emptyCallback(EFI_EVENT Event, void* Context)
 {
-}
-
-static void computationProcessorShutdownCallback(EFI_EVENT Event, void* Context)
-{
-    bs->CloseEvent(Event);
-
-    if (computationProcessorState == 1)
-    {
-        numberOfNonLaunchedSCs2++;
-    }
-    if (computationProcessorState == 2)
-    {
-        numberOfFailedSCs++;
-    }
-    numberOfAllSCs++;
-    
-    computationProcessorState = 0;
 }
 
 static long long load(CHAR16* fileName, unsigned long long totalSize, unsigned char* buffer)
@@ -10316,11 +10309,12 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             }
                         }
 
-                        if (!computationProcessorState)
+                        if (!computationProcessorState && (computation || __computation))
                         {
+                            numberOfAllSCs++;
                             computationProcessorState = 1;
-                            bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, computationProcessorShutdownCallback, NULL, &computationProcessorEvent);
-                            if (status = mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * CONTRACT_ITERATION_BATCH_SIZE * 2 * 1000, NULL, NULL))
+                            bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, shutdownCallback, NULL, &computationProcessorEvent);
+                            if (status = mpServicesProtocol->StartupThisAP(mpServicesProtocol, computationProcessor, computingProcessorNumber, computationProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * 1000, NULL, NULL))
                             {
                                 numberOfNonLaunchedSCs++;
                                 logStatus(L"EFI_MP_SERVICES_PROTOCOL.StartupThisAP() fails", status, __LINE__);
@@ -10831,11 +10825,19 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             {
                                 setText(message, L"SC execution duration = ");
                                 appendNumber(message, (scLoopNumerator / scLoopDenominator) * 1000000 / frequency, TRUE);
-                                appendText(message, L" mcs.");
+                                appendText(message, L" mcs (");
+                                appendNumber(message, scLoopDenominator3 ? (scLoopNumerator3 / scLoopDenominator3) * 1000000 / frequency : 0, TRUE);
+                                appendText(message, L" mcs | ");
+                                appendNumber(message, scLoopDenominator2 ? (scLoopNumerator2 / scLoopDenominator2) * 1000000 / frequency : 0, TRUE);
+                                appendText(message, L" mcs).");
                                 log(message);
+                                scLoopNumerator = 0;
+                                scLoopDenominator = 0;
+                                scLoopNumerator2 = 0;
+                                scLoopDenominator2 = 0;
+                                scLoopNumerator3 = 0;
+                                scLoopDenominator3 = 0;
                             }
-                            scLoopNumerator = 0;
-                            scLoopDenominator = 0;
 
                             if (tickerLoopDenominator)
                             {
