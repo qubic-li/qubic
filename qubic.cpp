@@ -136,7 +136,7 @@ static const unsigned char knownPublicPeers[][4] = {
 
 #define VERSION_A 1
 #define VERSION_B 172
-#define VERSION_C 0
+#define VERSION_C 3
 
 #define EPOCH 77
 #define TICK 9400000
@@ -5067,9 +5067,14 @@ public:
         return !_dejavu;
     }
 
-    inline void zeroDejavu()
+    inline unsigned int dejavu()
     {
-        _dejavu = 0;
+        return _dejavu;
+    }
+
+    inline void setDejavu(unsigned int dejavu)
+    {
+        _dejavu = dejavu;
     }
 
     inline void randomizeDejavu()
@@ -5315,16 +5320,17 @@ typedef struct
     long long prices[NUMBER_OF_COMPUTORS];
 } RespondContractIPO;
 
-#define REQUEST_ISSUED_ASSETS 35
+#define END_RESPONSE 35
+
+#define REQUEST_ISSUED_ASSETS 36
 
 typedef struct
 {
     unsigned char publicKey[32];
     int minUniverseIndex;
-    bool anyPublicKey;
 } RequestIssuedAssets;
 
-#define RESPOND_ISSUED_ASSETS 36
+#define RESPOND_ISSUED_ASSETS 37
 
 typedef struct
 {
@@ -6290,7 +6296,7 @@ static void enqueueResponse(Peer* peer, RequestResponseHeader* responseHeader)
     RELEASE(responseQueueHeadLock);
 }
 
-static void enqueueResponse(Peer* peer, const bool randomizeDejavu, const unsigned char type, void* data, unsigned int dataSize)
+static void enqueueResponse(Peer* peer, unsigned int dataSize, unsigned char type, unsigned int dejavu, void* data)
 {
     ACQUIRE(responseQueueHeadLock);
 
@@ -6300,16 +6306,12 @@ static void enqueueResponse(Peer* peer, const bool randomizeDejavu, const unsign
         responseQueueElements[responseQueueElementHead].offset = responseQueueBufferHead;
         RequestResponseHeader* responseHeader = (RequestResponseHeader*)&responseQueueBuffer[responseQueueBufferHead];
         responseHeader->setSize(sizeof(RequestResponseHeader) + dataSize);
-        if (randomizeDejavu)
-        {
-            responseHeader->randomizeDejavu();
-        }
-        else
-        {
-            responseHeader->zeroDejavu();
-        }
         responseHeader->setType(type);
-        bs->CopyMem(&responseQueueBuffer[responseQueueBufferHead + sizeof(RequestResponseHeader)], data, dataSize);
+        responseHeader->setDejavu(dejavu);
+        if (data)
+        {
+            bs->CopyMem(&responseQueueBuffer[responseQueueBufferHead + sizeof(RequestResponseHeader)], data, dataSize);
+        }
         responseQueueBufferHead += responseHeader->size();
         responseQueueElements[responseQueueElementHead].peer = peer;
         if (responseQueueBufferHead > RESPONSE_QUEUE_BUFFER_SIZE - BUFFER_SIZE)
@@ -6533,77 +6535,61 @@ static void broadcastMessage(const unsigned long long processorNumber, Processor
 
 static void requestEntity(Peer* peer, Processor* processor, RequestResponseHeader* header)
 {
-    struct
-    {
-        RequestResponseHeader header;
-        RespondedEntity respondedEntity;
-    } packet;
-
-    packet.header.setSize(sizeof(packet));
-    packet.header.randomizeDejavu();
-    packet.header.setType(RESPOND_ENTITY);
+    RespondedEntity respondedEntity;
 
     RequestedEntity* request = (RequestedEntity*)((char*)processor->buffer + sizeof(RequestResponseHeader));
-    *((__m256i*)packet.respondedEntity.entity.publicKey) = *((__m256i*)request->publicKey);
-    packet.respondedEntity.spectrumIndex = spectrumIndex(packet.respondedEntity.entity.publicKey);
-    packet.respondedEntity.tick = system.tick;
-    if (packet.respondedEntity.spectrumIndex < 0)
+    *((__m256i*)respondedEntity.entity.publicKey) = *((__m256i*)request->publicKey);
+    respondedEntity.spectrumIndex = spectrumIndex(respondedEntity.entity.publicKey);
+    respondedEntity.tick = system.tick;
+    if (respondedEntity.spectrumIndex < 0)
     {
-        packet.respondedEntity.entity.incomingAmount = 0;
-        packet.respondedEntity.entity.outgoingAmount = 0;
-        packet.respondedEntity.entity.numberOfIncomingTransfers = 0;
-        packet.respondedEntity.entity.numberOfOutgoingTransfers = 0;
-        packet.respondedEntity.entity.latestIncomingTransferTick = 0;
-        packet.respondedEntity.entity.latestOutgoingTransferTick = 0;
+        respondedEntity.entity.incomingAmount = 0;
+        respondedEntity.entity.outgoingAmount = 0;
+        respondedEntity.entity.numberOfIncomingTransfers = 0;
+        respondedEntity.entity.numberOfOutgoingTransfers = 0;
+        respondedEntity.entity.latestIncomingTransferTick = 0;
+        respondedEntity.entity.latestOutgoingTransferTick = 0;
 
-        bs->SetMem(packet.respondedEntity.siblings, sizeof(packet.respondedEntity.siblings), 0);
+        bs->SetMem(respondedEntity.siblings, sizeof(respondedEntity.siblings), 0);
     }
     else
     {
-        bs->CopyMem(&packet.respondedEntity.entity, &spectrum[packet.respondedEntity.spectrumIndex], sizeof(::Entity));
+        bs->CopyMem(&respondedEntity.entity, &spectrum[respondedEntity.spectrumIndex], sizeof(::Entity));
 
-        int sibling = packet.respondedEntity.spectrumIndex;
+        int sibling = respondedEntity.spectrumIndex;
         unsigned int spectrumDigestInputOffset = 0;
         for (unsigned int j = 0; j < SPECTRUM_DEPTH; j++)
         {
-            *((__m256i*)packet.respondedEntity.siblings[j]) = spectrumDigests[spectrumDigestInputOffset + (sibling ^ 1)];
+            *((__m256i*)respondedEntity.siblings[j]) = spectrumDigests[spectrumDigestInputOffset + (sibling ^ 1)];
             spectrumDigestInputOffset += (SPECTRUM_CAPACITY >> j);
             sibling >>= 1;
         }
     }
 
-    enqueueResponse(peer, &packet.header);
+    enqueueResponse(peer, sizeof(respondedEntity), RESPOND_ENTITY, header->dejavu(), &respondedEntity);
 }
 
 static void requestContractIPO(Peer* peer, Processor* processor, RequestResponseHeader* header)
 {
-    struct
-    {
-        RequestResponseHeader header;
-        RespondContractIPO respondContractIPO;
-    } packet;
-
-    packet.header.setSize(sizeof(packet));
-    packet.header.randomizeDejavu();
-    packet.header.setType(RESPOND_CONTRACT_IPO);
+    RespondContractIPO respondContractIPO;
 
     RequestContractIPO* request = (RequestContractIPO*)((char*)processor->buffer + sizeof(RequestResponseHeader));
-    packet.respondContractIPO.contractIndex = request->contractIndex;
-    packet.respondContractIPO.tick = system.tick;
+    respondContractIPO.contractIndex = request->contractIndex;
+    respondContractIPO.tick = system.tick;
     if (request->contractIndex >= sizeof(contractDescriptions) / sizeof(contractDescriptions[0])
         || system.epoch >= contractDescriptions[request->contractIndex].constructionEpoch)
     {
-        bs->SetMem(packet.respondContractIPO.publicKeys, sizeof(packet.respondContractIPO.publicKeys), 0);
-        bs->SetMem(packet.respondContractIPO.prices, sizeof(packet.respondContractIPO.prices), 0);
+        bs->SetMem(respondContractIPO.publicKeys, sizeof(respondContractIPO.publicKeys), 0);
+        bs->SetMem(respondContractIPO.prices, sizeof(respondContractIPO.prices), 0);
     }
     else
     {
         IPO* ipo = (IPO*)contractStates[request->contractIndex];
-        bs->CopyMem(packet.respondContractIPO.publicKeys, ipo->publicKeys, sizeof(packet.respondContractIPO.publicKeys));
-        bs->CopyMem(packet.respondContractIPO.prices, ipo->prices, sizeof(packet.respondContractIPO.prices));
+        bs->CopyMem(respondContractIPO.publicKeys, ipo->publicKeys, sizeof(respondContractIPO.publicKeys));
+        bs->CopyMem(respondContractIPO.prices, ipo->prices, sizeof(respondContractIPO.prices));
     }
 
-    enqueueResponse(peer, &packet.header);
+    enqueueResponse(peer, sizeof(respondContractIPO), RESPOND_CONTRACT_IPO, header->dejavu(), &respondContractIPO);
 }
 
 static void processSpecialCommand(Peer* peer, Processor* processor, RequestResponseHeader* header)
@@ -6639,7 +6625,7 @@ static void processSpecialCommand(Peer* peer, Processor* processor, RequestRespo
                     bs->CopyMem(&response.proposal, &system.proposals[request->computorIndex], sizeof(ComputorProposal));
                     bs->CopyMem(&response.ballot, &system.ballots[request->computorIndex], sizeof(ComputorBallot));
 
-                    enqueueResponse(peer, true, SPECIAL_COMMAND_GET_PROPOSAL_AND_BALLOT_RESPONSE, &response, sizeof(response));
+                    enqueueResponse(peer, sizeof(response), SPECIAL_COMMAND_GET_PROPOSAL_AND_BALLOT_RESPONSE, header->dejavu(), &response);
                 }
             }
             break;
@@ -6658,7 +6644,7 @@ static void processSpecialCommand(Peer* peer, Processor* processor, RequestRespo
                     response.computorIndex = request->computorIndex;
                     *((short*)response.padding) = 0;
 
-                    enqueueResponse(peer, true, SPECIAL_COMMAND_SET_PROPOSAL_AND_BALLOT_RESPONSE, &response, sizeof(response));
+                    enqueueResponse(peer, sizeof(response), SPECIAL_COMMAND_SET_PROPOSAL_AND_BALLOT_RESPONSE, header->dejavu(), &response);
                 }
             }
             break;
@@ -6996,7 +6982,7 @@ static void requestProcessor(void* ProcedureArgument)
                 {
                     if (broadcastedComputors.broadcastComputors.computors.epoch)
                     {
-                        enqueueResponse(peer, true, BROADCAST_COMPUTORS, &broadcastedComputors.broadcastComputors, sizeof(broadcastedComputors.broadcastComputors));
+                        enqueueResponse(peer, sizeof(broadcastedComputors.broadcastComputors), BROADCAST_COMPUTORS, header->dejavu(), &broadcastedComputors.broadcastComputors);
                     }
                 }
                 break;
@@ -7021,12 +7007,13 @@ static void requestProcessor(void* ProcedureArgument)
                                 const unsigned int offset = ((request->quorumTick.tick - system.initialTick) * NUMBER_OF_COMPUTORS) + computorIndices[index];
                                 if (ticks[offset].epoch == system.epoch)
                                 {
-                                    enqueueResponse(peer, true, BROADCAST_TICK, &ticks[offset], sizeof(Tick));
+                                    enqueueResponse(peer, sizeof(Tick), BROADCAST_TICK, header->dejavu(), &ticks[offset]);
                                 }
                             }
 
                             computorIndices[index] = computorIndices[--numberOfComputorIndices];
                         }
+                        enqueueResponse(peer, 0, END_RESPONSE, header->dejavu(), NULL);
                     }
                 }
                 break;
@@ -7037,7 +7024,7 @@ static void requestProcessor(void* ProcedureArgument)
                     if (request->requestedTickData.tick > system.initialTick && request->requestedTickData.tick < system.initialTick + MAX_NUMBER_OF_TICKS_PER_EPOCH
                         && tickData[request->requestedTickData.tick - system.initialTick].epoch == system.epoch)
                     {
-                        enqueueResponse(peer, true, BROADCAST_FUTURE_TICK_DATA, &tickData[request->requestedTickData.tick - system.initialTick], sizeof(TickData));
+                        enqueueResponse(peer, sizeof(TickData), BROADCAST_FUTURE_TICK_DATA, header->dejavu(), &tickData[request->requestedTickData.tick - system.initialTick]);
                     }
                 }
                 break;
@@ -7061,26 +7048,19 @@ static void requestProcessor(void* ProcedureArgument)
                                 && tickTransactionOffsets[request->tick - system.initialTick][tickTransactionIndices[index]])
                             {
                                 const Transaction* transaction = (Transaction*)&tickTransactions[tickTransactionOffsets[request->tick - system.initialTick][tickTransactionIndices[index]]];
-                                enqueueResponse(peer, true, BROADCAST_TRANSACTION, (void*)transaction, sizeof(Transaction) + transaction->inputSize + SIGNATURE_SIZE);
+                                enqueueResponse(peer, sizeof(Transaction) + transaction->inputSize + SIGNATURE_SIZE, BROADCAST_TRANSACTION, header->dejavu(), (void*)transaction);
                             }
 
                             tickTransactionIndices[index] = tickTransactionIndices[--numberOfTickTransactions];
                         }
+                        enqueueResponse(peer, 0, END_RESPONSE, header->dejavu(), NULL);
                     }
                 }
                 break;
 
                 case REQUEST_CURRENT_TICK_INFO:
                 {
-                    struct
-                    {
-                        RequestResponseHeader header;
-                        CurrentTickInfo currentTickInfo;
-                    } packet;
-
-                    packet.header.setSize(sizeof(packet));
-                    packet.header.randomizeDejavu();
-                    packet.header.setType(RESPOND_CURRENT_TICK_INFO);
+                    CurrentTickInfo currentTickInfo;
 
                     if (broadcastedComputors.broadcastComputors.computors.epoch)
                     {
@@ -7089,19 +7069,19 @@ static void requestProcessor(void* ProcedureArgument)
                         {
                             tickDuration = 0xFFFF;
                         }
-                        packet.currentTickInfo.tickDuration = (unsigned short)tickDuration;
+                        currentTickInfo.tickDuration = (unsigned short)tickDuration;
 
-                        packet.currentTickInfo.epoch = system.epoch;
-                        packet.currentTickInfo.tick = system.tick;
-                        packet.currentTickInfo.numberOfAlignedVotes = tickNumberOfComputors;
-                        packet.currentTickInfo.numberOfMisalignedVotes = (tickTotalNumberOfComputors - tickNumberOfComputors);
+                        currentTickInfo.epoch = system.epoch;
+                        currentTickInfo.tick = system.tick;
+                        currentTickInfo.numberOfAlignedVotes = tickNumberOfComputors;
+                        currentTickInfo.numberOfMisalignedVotes = (tickTotalNumberOfComputors - tickNumberOfComputors);
                     }
                     else
                     {
-                        bs->SetMem(&packet.currentTickInfo, sizeof(CurrentTickInfo), 0);
+                        bs->SetMem(&currentTickInfo, sizeof(CurrentTickInfo), 0);
                     }
 
-                    enqueueResponse(peer, &packet.header);
+                    enqueueResponse(peer, sizeof(currentTickInfo), RESPOND_CURRENT_TICK_INFO, header->dejavu(), &currentTickInfo);
                 }
                 break;
 
@@ -7967,7 +7947,7 @@ static void processTick(unsigned long long processorNumber)
                     broadcastFutureTickData.tickData.computorIndex ^= BROADCAST_FUTURE_TICK_DATA;
                     sign(computorSubseeds[ownComputorIndicesMapping[i]], computorPublicKeys[ownComputorIndicesMapping[i]], digest, broadcastFutureTickData.tickData.signature);
 
-                    enqueueResponse(NULL, false, BROADCAST_FUTURE_TICK_DATA, &broadcastFutureTickData, sizeof(broadcastFutureTickData));
+                    enqueueResponse(NULL, sizeof(broadcastFutureTickData), BROADCAST_FUTURE_TICK_DATA, 0, &broadcastFutureTickData);
                 }
 
                 system.latestLedTick = system.tick;
@@ -8033,7 +8013,7 @@ static void processTick(unsigned long long processorNumber)
                 KangarooTwelve((unsigned char*)&payload.transaction, sizeof(payload.transaction) + sizeof(payload.nonce), digest, sizeof(digest));
                 sign(computorSubseeds[i], computorPublicKeys[i], digest, payload.signature);
 
-                enqueueResponse(NULL, false, BROADCAST_TRANSACTION, &payload, sizeof(payload));
+                enqueueResponse(NULL, sizeof(payload), BROADCAST_TRANSACTION, 0, &payload);
             }
         }
     }
@@ -8735,7 +8715,7 @@ static void tickProcessor(void*)
                                     broadcastTick.tick.computorIndex ^= BROADCAST_TICK;
                                     sign(computorSubseeds[ownComputorIndicesMapping[i]], computorPublicKeys[ownComputorIndicesMapping[i]], digest, broadcastTick.tick.signature);
 
-                                    enqueueResponse(NULL, false, BROADCAST_TICK, &broadcastTick, sizeof(broadcastTick));
+                                    enqueueResponse(NULL, sizeof(broadcastTick), BROADCAST_TICK, 0, &broadcastTick);
                                 }
                             }
 
@@ -9385,6 +9365,7 @@ static bool initialize()
             return false;
         }
         bs->SetMem(tickData, ((unsigned long long)MAX_NUMBER_OF_TICKS_PER_EPOCH) * sizeof(TickData), 0);
+        bs->SetMem(tickTransactions, FIRST_TICK_TRANSACTION_OFFSET + (((unsigned long long)MAX_NUMBER_OF_TICKS_PER_EPOCH) * NUMBER_OF_TRANSACTIONS_PER_TICK * MAX_TRANSACTION_SIZE / TRANSACTION_SPARSENESS), 0);
         bs->SetMem(tickTransactionOffsets, sizeof(tickTransactionOffsets), 0);
         for (unsigned int i = 0; i < SPECTRUM_CAPACITY; i++)
         {
