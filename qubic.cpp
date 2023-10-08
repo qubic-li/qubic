@@ -126,6 +126,7 @@ static unsigned char computorSeeds[][55 + 1] = {
 };
 
 static const unsigned char knownPublicPeers[][4] = {
+    {127,0,0,1} // REMOVE THIS ENTRY AND REPLACE IT WITH YOUR OWN ADDRESS
 };
 
 
