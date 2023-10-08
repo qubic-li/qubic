@@ -45,7 +45,7 @@ gdisk /dev/sda
 - spectrum.XXX => must be the current spectrum file. XXX must be replaced with current epoch. (e.g `spectrum.068`)
 - system => to start from scratch, use an empty file. (e.g. `touch system`)
 - Bootx64.efi => boot loader
-- statrup.nsh => UEFI start script
+- startup.nsh => UEFI start script
 - Qubic.efi => the compiled qubic node code (efi executable)
 
 the content of your `startup.nsh` could look like:
