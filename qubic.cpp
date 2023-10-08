@@ -40,6 +40,11 @@ static unsigned char __year();
 static CONTRACT_STATE_TYPE* _QX;
 
 #define QUOTTERY_CONTRACT_INDEX 2
+#define CONTRACT_INDEX QUOTTERY_CONTRACT_INDEX
+#define CONTRACT_STATE_TYPE QUOTTERY
+#define CONTRACT_STATE2_TYPE QUOTTERY2
+#include "qubics/Quottery.h"
+static CONTRACT_STATE_TYPE* _QUOTTERY;
 
 #define MAX_CONTRACT_ITERATION_DURATION 1000 // In milliseconds, must be above 0
 #define MAX_NUMBER_OF_CONTRACTS 1024 // Must be 1024
@@ -99,6 +104,12 @@ static void initializeContract(const unsigned int contractIndex, void* contractS
         REGISTER_CONTRACT_FUNCTIONS_AND_PROCEDURES(QX);
     }
     break;
+
+    case QUOTTERY_CONTRACT_INDEX:
+    {
+        REGISTER_CONTRACT_FUNCTIONS_AND_PROCEDURES(QUOTTERY);
+    }
+    break;
     }
 }
 
@@ -124,11 +135,11 @@ static const unsigned char knownPublicPeers[][4] = {
 #define AVX512 0
 
 #define VERSION_A 1
-#define VERSION_B 171
-#define VERSION_C 2
+#define VERSION_B 172
+#define VERSION_C 0
 
-#define EPOCH 76
-#define TICK 9210000
+#define EPOCH 77
+#define TICK 9400000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
 
@@ -5036,8 +5047,7 @@ struct RequestResponseHeader
 private:
     unsigned char _size[3];
     unsigned char _type;
-    unsigned char _dejavu[3];
-    unsigned char _deprecatedType;
+    unsigned int _dejavu;
 
 public:
     inline unsigned int size()
@@ -5054,27 +5064,21 @@ public:
 
     inline bool isDejavuZero()
     {
-        return !(_dejavu[0] | _dejavu[1] | _dejavu[2]);
+        return !_dejavu;
     }
 
     inline void zeroDejavu()
     {
-        _dejavu[0] = 0;
-        _dejavu[1] = 0;
-        _dejavu[2] = 0;
+        _dejavu = 0;
     }
 
     inline void randomizeDejavu()
     {
-        unsigned int random;
-        _rdrand32_step(&random);
-        if (!random)
+        _rdrand32_step(&_dejavu);
+        if (!_dejavu)
         {
-            random = 1;
+            _dejavu = 1;
         }
-        _dejavu[0] = (unsigned char)random;
-        _dejavu[1] = (unsigned char)(random >> 8);
-        _dejavu[2] = (unsigned char)(random >> 16);
     }
 
     inline unsigned char type()
@@ -5084,7 +5088,7 @@ public:
 
     inline void setType(const unsigned char type)
     {
-        _deprecatedType = _type = type;
+        _type = type;
     }
 };
 
@@ -5481,17 +5485,12 @@ static __m256i* assetDigests = NULL;
 static unsigned long long* assetChangeFlags = NULL;
 static char CONTRACT_ASSET_UNIT_OF_MEASUREMENT[7] = { 0, 0, 0, 0, 0, 0, 0 };
 
-static volatile int numberOfNonLaunchedSCs = 0, numberOfNonLaunchedSCs2 = 0, numberOfFailedSCs = 0, numberOfAllSCs = 0;
 static volatile char computerLock = 0;
-static volatile char computationProcessorState = 0;
-static volatile unsigned long long scLoopNumerator = 0, scLoopDenominator = 0;
-static volatile unsigned long long scLoopNumerator2 = 0, scLoopDenominator2 = 0;
-static volatile unsigned long long scLoopNumerator3 = 0, scLoopDenominator3 = 0;
-static EFI_EVENT computationProcessorEvent;
 static unsigned long long mainLoopNumerator = 0, mainLoopDenominator = 0;
+static unsigned char contractProcessorState = 0;
+static unsigned int contractProcessorPhase;
+static EFI_EVENT contractProcessorEvent;
 static volatile unsigned int executedContractIndex;
-static void (*__computation)(void*) = NULL;
-static void (*computation)(void*, void*, void*) = NULL;
 static __m256i currentContract;
 static unsigned char* contractStates[sizeof(contractDescriptions) / sizeof(contractDescriptions[0])];
 static __m256i contractStateDigests[MAX_NUMBER_OF_CONTRACTS * 2 - 1];
@@ -7414,6 +7413,89 @@ static unsigned char __year()
     return etalonTick.year;
 }
 
+static void contractProcessor(void*)
+{
+    enableAVX();
+
+    switch (contractProcessorPhase)
+    {
+    case INITIALIZE:
+    {
+        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+        {
+            if (system.epoch == contractDescriptions[executedContractIndex].constructionEpoch
+                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+            {
+                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+                contractSystemProcedures[executedContractIndex][INITIALIZE](contractStates[executedContractIndex]);
+            }
+        }
+    }
+    break;
+
+    case BEGIN_EPOCH:
+    {
+        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+        {
+            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+            {
+                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+                contractSystemProcedures[executedContractIndex][BEGIN_EPOCH](contractStates[executedContractIndex]);
+            }
+        }
+    }
+    break;
+
+    case BEGIN_TICK:
+    {
+        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+        {
+            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+            {
+                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+                contractSystemProcedures[executedContractIndex][BEGIN_TICK](contractStates[executedContractIndex]);
+            }
+        }
+    }
+    break;
+
+    case END_TICK:
+    {
+        for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
+        {
+            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+            {
+                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+                contractSystemProcedures[executedContractIndex][END_TICK](contractStates[executedContractIndex]);
+            }
+        }
+    }
+    break;
+
+    case END_EPOCH:
+    {
+        for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
+        {
+            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
+                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
+            {
+                currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
+
+                contractSystemProcedures[executedContractIndex][END_EPOCH](contractStates[executedContractIndex]);
+            }
+        }
+    }
+    break;
+    }
+}
+
 static void processTick(unsigned long long processorNumber)
 {
     if (tickPhase < 1)
@@ -7427,52 +7509,26 @@ static void processTick(unsigned long long processorNumber)
 
     if (system.tick == system.initialTick)
     {
-        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+        contractProcessorPhase = INITIALIZE;
+        contractProcessorState = 1;
+        while (contractProcessorState)
         {
-            if (system.epoch == contractDescriptions[executedContractIndex].constructionEpoch
-                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
-            {
-                __computation = contractSystemProcedures[executedContractIndex][INITIALIZE];
-                
-                while (__computation)
-                {
-                    _mm_pause();
-                }
-            }
+            _mm_pause();
         }
 
-        for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+        contractProcessorPhase = BEGIN_EPOCH;
+        contractProcessorState = 1;
+        while (contractProcessorState)
         {
-            if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
-                && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
-            {
-                __computation = contractSystemProcedures[executedContractIndex][BEGIN_EPOCH];
-
-                while (__computation)
-                {
-                    _mm_pause();
-                }
-            }
+            _mm_pause();
         }
     }
 
-    for (executedContractIndex = 1; executedContractIndex < sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex++)
+    contractProcessorPhase = BEGIN_TICK;
+    contractProcessorState = 1;
+    while (contractProcessorState)
     {
-        if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
-            && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
-        {
-            const unsigned long long scBeginningTime = __rdtsc();
-
-            __computation = contractSystemProcedures[executedContractIndex][BEGIN_TICK];
-
-            while (__computation)
-            {
-                _mm_pause();
-            }
-
-            scLoopNumerator += __rdtsc() - scBeginningTime;
-            scLoopDenominator++;
-        }
+        _mm_pause();
     }
 
     ACQUIRE(tickDataLock);
@@ -7794,23 +7850,11 @@ static void processTick(unsigned long long processorNumber)
         }
     }
 
-    for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
+    contractProcessorPhase = END_TICK;
+    contractProcessorState = 1;
+    while (contractProcessorState)
     {
-        if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
-            && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
-        {
-            const unsigned long long scBeginningTime = __rdtsc();
-
-            __computation = contractSystemProcedures[executedContractIndex][END_TICK];
-
-            while (__computation)
-            {
-                _mm_pause();
-            }
-
-            scLoopNumerator2 += __rdtsc() - scBeginningTime;
-            scLoopDenominator2++;
-        }
+        _mm_pause();
     }
 
     unsigned int digestIndex;
@@ -7997,18 +8041,11 @@ static void processTick(unsigned long long processorNumber)
 
 static void endEpoch()
 {
-    for (executedContractIndex = sizeof(contractDescriptions) / sizeof(contractDescriptions[0]); executedContractIndex-- > 1; )
+    contractProcessorPhase = END_EPOCH;
+    contractProcessorState = 1;
+    while (contractProcessorState)
     {
-        if (system.epoch >= contractDescriptions[executedContractIndex].constructionEpoch
-            && system.epoch < contractDescriptions[executedContractIndex].destructionEpoch)
-        {
-            __computation = contractSystemProcedures[executedContractIndex][END_EPOCH];
-
-            while (__computation)
-            {
-                _mm_pause();
-            }
-        }
+        _mm_pause();
     }
 
     Contract0State* contract0State = (Contract0State*)contractStates[0];
@@ -8929,38 +8966,8 @@ static void tickProcessor(void*)
     }
 }
 
-static void computationProcessor(void*)
+static void emptyCallback(EFI_EVENT Event, void* Context)
 {
-    computationProcessorState = 2;
-
-    enableAVX();
-
-    if (computation)
-    {
-        // TODO
-    }
-    else
-    {
-        if (__computation)
-        {
-            const unsigned long long scBeginningTime = __rdtsc();
-
-            currentContract = _mm256_set_epi64x(0, 0, 0, executedContractIndex);
-
-            __computation(contractStates[executedContractIndex]);
-
-            __computation = NULL;
-
-            scLoopNumerator3 += __rdtsc() - scBeginningTime;
-            scLoopDenominator3++;
-        }
-        else
-        {
-            _mm_pause();
-        }
-    }
-
-    computationProcessorState = 0;
 }
 
 static void shutdownCallback(EFI_EVENT Event, void* Context)
@@ -8968,8 +8975,11 @@ static void shutdownCallback(EFI_EVENT Event, void* Context)
     bs->CloseEvent(Event);
 }
 
-static void emptyCallback(EFI_EVENT Event, void* Context)
+static void contractProcessorShutdownCallback(EFI_EVENT Event, void* Context)
 {
+    bs->CloseEvent(Event);
+
+    contractProcessorState = 0;
 }
 
 static long long load(CHAR16* fileName, unsigned long long totalSize, unsigned char* buffer)
@@ -9578,13 +9588,13 @@ static bool initialize()
         unsigned char randomSeed[32];
         bs->SetMem(randomSeed, 32, 0);
         randomSeed[0] = 1;
-        randomSeed[1] = 24;
-        randomSeed[2] = 11;
-        randomSeed[3] = 42;
-        randomSeed[4] = 169;
-        randomSeed[5] = 73;
-        randomSeed[6] = 83;
-        randomSeed[7] = 63;
+        randomSeed[1] = 67;
+        randomSeed[2] = 24;
+        randomSeed[3] = 77;
+        randomSeed[4] = 97;
+        randomSeed[5] = 211;
+        randomSeed[6] = 88;
+        randomSeed[7] = 1;
         random(randomSeed, randomSeed, (unsigned char*)miningData, sizeof(miningData));
 
         if (status = bs->AllocatePool(EfiRuntimeServicesData, NUMBER_OF_MINER_SOLUTION_FLAGS / 8, (void**)&minerSolutionFlags))
@@ -9942,15 +9952,7 @@ static void logInfo()
     unsigned int filledResponseQueueBufferSize = (responseQueueBufferHead >= responseQueueBufferTail) ? (responseQueueBufferHead - responseQueueBufferTail) : (RESPONSE_QUEUE_BUFFER_SIZE - (responseQueueBufferTail - responseQueueBufferHead));
     unsigned int filledRequestQueueLength = (requestQueueElementHead >= requestQueueElementTail) ? (requestQueueElementHead - requestQueueElementTail) : (REQUEST_QUEUE_LENGTH - (requestQueueElementTail - requestQueueElementHead));
     unsigned int filledResponseQueueLength = (responseQueueElementHead >= responseQueueElementTail) ? (responseQueueElementHead - responseQueueElementTail) : (RESPONSE_QUEUE_LENGTH - (responseQueueElementTail - responseQueueElementHead));
-    setNumber(message, numberOfNonLaunchedSCs, TRUE);
-    appendText(message, L"/");
-    appendNumber(message, numberOfNonLaunchedSCs2, TRUE);
-    appendText(message, L"/");
-    appendNumber(message, numberOfFailedSCs, TRUE);
-    appendText(message, L"/");
-    appendNumber(message, numberOfAllSCs, TRUE);
-    appendText(message, L" SCs | ");
-    appendNumber(message, filledRequestQueueBufferSize, TRUE);
+    setNumber(message, filledRequestQueueBufferSize, TRUE);
     appendText(message, L" (");
     appendNumber(message, filledRequestQueueLength, TRUE);
     appendText(message, L") :: ");
@@ -10309,7 +10311,13 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             }
                         }
 
-                        if (!computationProcessorState && (computation || __computation))
+                        if (contractProcessorState == 1)
+                        {
+                            contractProcessorState = 2;
+                            bs->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY, contractProcessorShutdownCallback, NULL, &contractProcessorEvent);
+                            mpServicesProtocol->StartupThisAP(mpServicesProtocol, contractProcessor, computingProcessorNumber, contractProcessorEvent, MAX_CONTRACT_ITERATION_DURATION * 1000, NULL, NULL);
+                        }
+                        /*if (!computationProcessorState && (computation || __computation))
                         {
                             numberOfAllSCs++;
                             computationProcessorState = 1;
@@ -10319,7 +10327,7 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                                 numberOfNonLaunchedSCs++;
                                 logStatus(L"EFI_MP_SERVICES_PROTOCOL.StartupThisAP() fails", status, __LINE__);
                             }
-                        }
+                        }*/
 
                         peerTcp4Protocol->Poll(peerTcp4Protocol);
 
@@ -10820,24 +10828,6 @@ EFI_STATUS efi_main(EFI_HANDLE imageHandle, EFI_SYSTEM_TABLE* systemTable)
                             }
                             mainLoopNumerator = 0;
                             mainLoopDenominator = 0;
-
-                            if (scLoopDenominator)
-                            {
-                                setText(message, L"SC execution duration = ");
-                                appendNumber(message, (scLoopNumerator / scLoopDenominator) * 1000000 / frequency, TRUE);
-                                appendText(message, L" mcs (");
-                                appendNumber(message, scLoopDenominator3 ? (scLoopNumerator3 / scLoopDenominator3) * 1000000 / frequency : 0, TRUE);
-                                appendText(message, L" mcs | ");
-                                appendNumber(message, scLoopDenominator2 ? (scLoopNumerator2 / scLoopDenominator2) * 1000000 / frequency : 0, TRUE);
-                                appendText(message, L" mcs).");
-                                log(message);
-                                scLoopNumerator = 0;
-                                scLoopDenominator = 0;
-                                scLoopNumerator2 = 0;
-                                scLoopDenominator2 = 0;
-                                scLoopNumerator3 = 0;
-                                scLoopDenominator3 = 0;
-                            }
 
                             if (tickerLoopDenominator)
                             {
