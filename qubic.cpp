@@ -135,12 +135,14 @@ static const unsigned char knownPublicPeers[][4] = {
 
 #define VERSION_A 1
 #define VERSION_B 173
-#define VERSION_C 0
+#define VERSION_C 1
 
 #define EPOCH 78
 #define TICK 9600000
 
 #define ARBITRATOR "AFZPUAIYVPNUYGJRQVLUKOPPVLHAZQTGLYAAUUNBXFTVTAMSBKQBLEIEPCVJ"
+
+#define IGNORE_RESOURCE_TESTING 0
 
 static unsigned short SYSTEM_FILE_NAME[] = L"system";
 static unsigned short SPECTRUM_FILE_NAME[] = L"spectrum.???";
@@ -7649,7 +7651,9 @@ static void processTick(unsigned long long processorNumber)
         tickPhase = 1;
     }
 
+#if !IGNORE_RESOURCE_TESTING
     etalonTick.prevResourceTestingDigest = resourceTestingDigest;
+#endif
     *((__m256i*)etalonTick.prevSpectrumDigest) = spectrumDigests[(SPECTRUM_CAPACITY * 2 - 1) - 1];
     getUniverseDigest((__m256i*)etalonTick.prevUniverseDigest);
     getComputerDigest((__m256i*)etalonTick.prevComputerDigest);
@@ -7813,6 +7817,7 @@ static void processTick(unsigned long long processorNumber)
                                         && transaction->inputSize == 32
                                         && !transaction->inputType)
                                     {
+#if !IGNORE_RESOURCE_TESTING
                                         unsigned char data[32 + 32];
                                         *((__m256i*)&data[0]) = *((__m256i*)transaction->sourcePublicKey);
                                         *((__m256i*)&data[32]) = *((__m256i*)(((unsigned char*)transaction) + sizeof(Transaction)));
@@ -7948,6 +7953,7 @@ static void processTick(unsigned long long processorNumber)
                                             }
                                         }
                                         else
+#endif
                                         {
                                             for (unsigned int i = 0; i < sizeof(computorSeeds) / sizeof(computorSeeds[0]); i++)
                                             {
@@ -8862,6 +8868,7 @@ static void tickProcessor(void*)
 
                         if (system.tick > system.latestCreatedTick || system.tick == system.initialTick)
                         {
+#if !IGNORE_RESOURCE_TESTING
                             if (isMain)
                             {
                                 BroadcastTick broadcastTick;
@@ -8888,6 +8895,7 @@ static void tickProcessor(void*)
                                     enqueueResponse(NULL, sizeof(broadcastTick), BROADCAST_TICK, 0, &broadcastTick);
                                 }
                             }
+#endif
 
                             if (system.tick != system.initialTick)
                             {
@@ -8918,11 +8926,13 @@ static void tickProcessor(void*)
                                 tickTotalNumberOfComputors++;
 
                                 unsigned char saltedData[32 + 32];
-                                *((__m256i*) & saltedData[0]) = *((__m256i*)broadcastedComputors.broadcastComputors.computors.publicKeys[tick->computorIndex]);
-                                *((unsigned long long*)&saltedData[32]) = resourceTestingDigest;
                                 unsigned char saltedDigest[32];
+                                *((__m256i*) & saltedData[0]) = *((__m256i*)broadcastedComputors.broadcastComputors.computors.publicKeys[tick->computorIndex]);
+#if !IGNORE_RESOURCE_TESTING
+                                *((unsigned long long*)&saltedData[32]) = resourceTestingDigest;
                                 KangarooTwelve(saltedData, 32 + sizeof(resourceTestingDigest), (unsigned char*)&saltedDigest, sizeof(resourceTestingDigest));
                                 if (tick->saltedResourceTestingDigest == *((unsigned long long*)&saltedDigest))
+#endif
                                 {
                                     *((__m256i*) & saltedData[32]) = *((__m256i*)etalonTick.saltedSpectrumDigest);
                                     KangarooTwelve64To32(saltedData, saltedDigest);
@@ -10255,7 +10265,7 @@ static void processKeyPresses()
         }
         break;
 
-        case 0x0D:
+        /*case 0x0D:
         {
             unsigned int numberOfSolutions = 0;
             for (unsigned int i = 0; i < numberOfMiners; i++)
@@ -10272,7 +10282,7 @@ static void processKeyPresses()
             appendText(message, L").");
             log(message);
         }
-        break;
+        break;*/
 
         case 0x0E:
         {
