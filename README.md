@@ -1,6 +1,8 @@
 # qubic - node
 Qubic Node Source Code - this repository contains the source code of a full qubic node.
 
+Thanks to XARKUR you can also find more detailed instruction in he's repo: https://github.com/XARKUR/Qubic
+
 ## Prerequisites
 To run a qubic node, you need the following parts:
 - Bare Metal Server/Computer with at least 8 Cores (high CPU frequency with AVX2 support)
