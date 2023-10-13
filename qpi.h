@@ -6805,16 +6805,6 @@ namespace QPI
 		return ::__millisecond();
 	}
 
-	static uint32 minCandidateScore(
-	) {
-		return ::__minCandidateScore();
-	}
-
-	static uint32 minComputorScore(
-	) {
-		return ::__minComputorScore();
-	}
-
 	static uint8 minute(
 	) { // [0..59]
 		return ::__minute();
